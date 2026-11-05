@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The reporting steps write a check run and (on pull requests) PR comments.
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Every installed package's registry signature (and provenance attestation, where it has one) checks out.
+      - run: npm audit signatures
+      - run: npm run typecheck
+      # src/ stays within ES2015 built-ins (eslint-plugin-es-x).
+      - run: npm run lint
+
+      # The tests also run in Chromium, Firefox and WebKit (Vitest browser mode, Playwright). The browser builds are
+      # cached per Playwright version; `install` then only downloads what's missing, and installs the OS packages
+      # they need (those aren't cached).
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(jq -r .version node_modules/playwright/package.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      # Tests on Node, Chromium, Firefox and WebKit, with coverage (from the node project):
+      # writes test-results/junit.xml (one suite per test file and project) and coverage/coverage-{summary,final}.json.
+      - name: Test
+        id: test
+        run: npm run test:ci
+
+      # Test results: job summary, a check run, and a comment on the pull request (updated on each push).
+      # Runs even when tests fail, so the failures are reported; the job still fails at the Test step.
+      - name: Publish test results
+        if: ${{ !cancelled() && hashFiles('test-results/junit.xml') != '' }}
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: test-results/junit.xml
+          check_name: Test results
+          comment_title: Test results
+          # Only list failures in the comment/summary; 60k+ test names would overflow both.
+          report_individual_runs: false
+          json_suite_details: false
+
+      # Coverage: job summary and a comment on the pull request (updated on each push), with per-file
+      # coverage for the files the pull request changes.
+      - name: Publish coverage
+        if: ${{ !cancelled() && hashFiles('coverage/coverage-summary.json') != '' }}
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: coverage/coverage-summary.json
+          json-final-path: coverage/coverage-final.json
+          file-coverage-mode: changes
+
+      - run: npm run build
+      # The package as published: exports/types resolve (publint, arethetypeswrong), and two clean builds give
+      # byte-identical tarballs.
+      - run: npm run check:package
+      - run: npm run check:reproducible

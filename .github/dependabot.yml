@@ -1,0 +1,15 @@
+version: 2
+# One pull request per dependency bump (no groups), so each can be reviewed, tested and merged on its own.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: nuget
+    directory: /tools
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- NodaTime.Test brings NUnit and Microsoft.Testing.Platform, which would generate a test-runner entry point
+         that competes with Program.cs (warning CS7022). This is a generator, not a test project. -->
+    <GenerateTestingPlatformEntryPoint>false</GenerateTestingPlatformEntryPoint>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The golden JSON scenarios: NodaTime's own JSON serializer. -->
+    <PackageReference Include="NodaTime.Serialization.SystemTextJson" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(NodaTimeRoot)src/NodaTime/NodaTime.csproj" />
+    <!-- NodaTime's own tzdb compiler and CLDR windowsZones.xml parser (data tzdb, cldr). -->
+    <ProjectReference Include="$(NodaTimeRoot)src/NodaTime.TzdbCompiler/NodaTime.TzdbCompiler.csproj" />
+    <!-- The test assembly whose NUnit tests the scenarios command enumerates (brings NodaTime.Testing and NUnit). -->
+    <ProjectReference Include="$(NodaTimeRoot)src/NodaTime.Test/NodaTime.Test.csproj" SetTargetFramework="TargetFramework=net10.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,97 @@
+name: draft release
+
+# On every push to main: works out the next version, builds and packs the packages with it, and creates a draft
+# GitHub release with the tarballs attached. Publishing the draft (by hand) runs release.yml, which publishes to npm.
+#
+# The version: major.minor from the root package.json (maintained by hand, e.g. "0.2"); the patch is one more than the
+# highest published release of that major.minor, or 0. Drafts don't count, so until a draft is published, each push
+# replaces it (same version, new commit): the old draft and any leftover tag for the version are deleted first.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create and delete releases and tags
+
+# One draft at a time: a newer push supersedes a run in progress.
+concurrency:
+  group: draft-release
+  cancel-in-progress: true
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags, for the HEAD tag check
+      # No cache: this run builds the tarballs attached to the release, so it mustn't restore anything another run
+      # could have written (cache poisoning).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+
+      - name: Next version
+        id: version
+        run: |
+          major_minor=$(jq -r .version package.json)
+          if [[ ! $major_minor =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The root package.json's version must be MAJOR.MINOR (e.g. 0.2), not '$major_minor'."
+            exit 1
+          fi
+          # The patch after the highest published (non-draft) release vMAJOR.MINOR.PATCH, or 0.
+          patch=$(gh release list --limit 1000 --json tagName,isDraft | jq --arg prefix "v$major_minor." '
+            [.[] | select(.isDraft | not) | .tagName | select(startswith($prefix)) | ltrimstr($prefix)
+              | select(test("^[0-9]+$")) | tonumber]
+            | if length == 0 then 0 else max + 1 end')
+          echo "Next version: $major_minor.$patch"
+          echo "version=$major_minor.$patch" >> "$GITHUB_OUTPUT"
+      - name: HEAD isn't already released as another version
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          others=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vxF "v$version" || true)
+          if [ -n "$others" ]; then
+            echo "::error::HEAD is tagged $others, so it can't be released as v$version."
+            exit 1
+          fi
+      # In the repo the packages' versions are the placeholder 0.0.0-development (as is noda-js-zod's peer dependency
+      # on noda-js, so npm links the workspace). npm pkg set keeps package.json's formatting.
+      - name: Set the package versions
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          npm pkg set "version=$version" --workspace src/noda-js --workspace src/noda-js-zod
+          npm pkg set "peerDependencies.noda-js=^$version" --workspace src/noda-js-zod
+
+      - run: npm run build
+      - run: npm run check:package
+      - name: Pack
+        run: |
+          rm -rf artifacts && mkdir artifacts # empty, and it must exist for npm pack
+          npm pack --workspaces --pack-destination artifacts
+
+      - name: Replace an earlier draft and leftover tag for this version
+        run: |
+          tag='v${{ steps.version.outputs.version }}'
+          drafts=$(gh release list --limit 1000 --json tagName,isDraft | jq --arg tag "$tag" '[.[] | select(.isDraft and .tagName == $tag)] | length')
+          for ((i = 0; i < drafts; i++)); do
+            echo "Deleting the earlier draft release $tag"
+            gh release delete "$tag" --yes
+          done
+          # A tag without a published release: left over from a release that was deleted (or unpublished).
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+            echo "Deleting the leftover tag $tag"
+            git push origin --delete "refs/tags/$tag"
+          fi
+
+      - name: Create the draft release
+        run: |
+          tag='v${{ steps.version.outputs.version }}'
+          gh release create "$tag" artifacts/*.tgz --draft --target "$GITHUB_SHA" --title "$tag" --generate-notes

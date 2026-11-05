@@ -1,0 +1,87 @@
+{
+  "name": "noda-js",
+  "version": "0.0.0-development",
+  "description": "A TypeScript port of NodaTime: the same API, names and wire formats.",
+  "keywords": [
+    "nodatime",
+    "noda-time",
+    "date",
+    "time",
+    "datetime",
+    "timezone",
+    "tzdb",
+    "iana",
+    "duration",
+    "period",
+    "instant",
+    "calendar",
+    "linq",
+    "linq-to-typescript"
+  ],
+  "homepage": "https://github.com/jeremy-morren/noda-js#readme",
+  "bugs": {
+    "url": "https://github.com/jeremy-morren/noda-js/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremy-morren/noda-js.git",
+    "directory": "src/noda-js"
+  },
+  "license": "Apache-2.0",
+  "author": "Jeremy Morren",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tzdb": {
+      "types": "./dist/entries/tzdb.d.ts",
+      "default": "./dist/entries/tzdb.js"
+    },
+    "./tzdb/bundled": {
+      "types": "./dist/entries/tzdb-bundled.d.ts",
+      "default": "./dist/entries/tzdb-bundled.js"
+    },
+    "./browser": {
+      "types": "./dist/entries/browser.d.ts",
+      "default": "./dist/entries/browser.js"
+    },
+    "./testing": {
+      "types": "./dist/entries/testing.d.ts",
+      "default": "./dist/entries/testing.js"
+    },
+    "./cultures": {
+      "types": "./dist/Cultures/index.generated.d.ts",
+      "default": "./dist/Cultures/index.generated.js"
+    },
+    "./windows": {
+      "types": "./dist/entries/windows.d.ts",
+      "default": "./dist/entries/windows.js"
+    },
+    "./linq": {
+      "types": "./dist/entries/linq.d.ts",
+      "default": "./dist/entries/linq.js"
+    }
+  },
+  "files": [
+    "dist",
+    "**/*.ts",
+    "!dist/**/*.tsbuildinfo",
+    "LICENSE.txt",
+    "NOTICE.txt"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "pwsh -NoProfile -File ../../scripts/clean.ps1 dist && tsc -b",
+    "prepack": "pwsh -NoProfile -Command \"Copy-Item ../../LICENSE.txt, ../../NOTICE.txt .\"",
+    "check:package": "publint --strict && attw --pack . --profile esm-only"
+  },
+  "dependencies": {
+    "long": "^5.3.2"
+  }
+}

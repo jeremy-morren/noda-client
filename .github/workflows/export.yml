@@ -1,0 +1,41 @@
+# Re-runs the .NET tools (tools/generate.ps1) and opens a PR when generated files change:
+# new IANA tz data or CLDR mapping, new test scenarios after a NodaTime bump, culture data changes.
+name: export
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # weekly, Monday 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: tools/global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: pwsh -NoProfile -File tools/generate.ps1
+      - run: npm run typecheck
+      - run: npm test
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automated/export
+          title: "Regenerate data from .NET / NodaTime / IANA / CLDR"
+          commit-message: "Regenerate data from .NET / NodaTime / IANA / CLDR"
+          body: |
+            Automated run of `tools/generate.ps1`. Review the diff of `*.generated.ts` files:
+            tzdb (`src/noda-js/TimeZones/TzdbBundledData.generated.ts`), CLDR Windows mapping, cultures,
+            test scenarios and golden vectors.

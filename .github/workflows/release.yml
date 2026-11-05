@@ -1,0 +1,112 @@
+name: release
+
+# Publishes the packages to npm when a GitHub release is published: normally the draft that draft-release.yml created
+# (tag vMAJOR.MINOR.PATCH, with the packed tarballs attached). The version comes from the tag; it must be in the root
+# package.json's major.minor, and the released commit mustn't be tagged with another version.
+#
+# Before publishing, this rebuilds at the tag, runs every check, and confirms the tarballs it would publish are
+# byte-identical to the ones attached to the release (the build is reproducible), so what was reviewed is what ships.
+#
+# Uses npm trusted publishing (OIDC): no npm token is stored anywhere, and npm generates a provenance attestation
+# linking each package to this workflow run and commit. One-time setup on npmjs.com, per package (noda-js,
+# noda-js-zod): Settings → Trusted publishing → GitHub Actions, repository jeremy-morren/noda-js, workflow
+# release.yml, environment npm. (npm only allows that once a package exists, so the very first version of a new
+# package name is published by hand.) npm never accepts the same version twice, so a version that was published
+# can't be released again, even if its GitHub release was deleted.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags, for the HEAD tag check
+      # No registry-url: setup-node would then set NODE_AUTH_TOKEN, which overrides the OIDC flow.
+      # No caches anywhere in this workflow: a publishing run must not restore anything another run could have written
+      # (cache poisoning).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # The latest npm, as npm recommends for trusted publishing (it needs npm 11.5.1 or later).
+      - name: Update npm
+        run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm audit signatures
+
+      - name: Version from the tag
+        id: version
+        run: |
+          if [[ $TAG =~ ^v([0-9]+.[0-9]+).[0-9]+$ ]]; then
+            tag_major_minor=${BASH_REMATCH[1]}
+          else
+            echo "::error::Release tags are vMAJOR.MINOR.PATCH, not '$TAG'."
+            exit 1
+          fi
+          major_minor=$(jq -r .version package.json)
+          if [ "$tag_major_minor" != "$major_minor" ]; then
+            echo "::error::The tag $TAG isn't in the root package.json's major.minor ($major_minor)."
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: HEAD isn't tagged with another version
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          others=$(git tag --points-at HEAD | grep -E '^v[0-9]+.[0-9]+.[0-9]+$' | grep -vxF "v$version" || true)
+          if [ -n "$others" ]; then
+            echo "::error::HEAD is tagged $others, so it can't be released as v$version."
+            exit 1
+          fi
+      # As in draft-release.yml: the repo's placeholder versions become the release's.
+      - name: Set the package versions
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          npm pkg set "version=$version" --workspace src/noda-js --workspace src/noda-js-zod
+          npm pkg set "peerDependencies.noda-js=^$version" --workspace src/noda-js-zod
+
+      - run: npm run typecheck
+      - run: npm run lint
+      # The tests run on Node and in Chromium, Firefox and WebKit, as in ci.yml (browsers downloaded fresh: no cache).
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:package
+      - run: npm run check:reproducible
+
+      - name: The tarballs match the release's
+        run: |
+          rm -rf packed released && mkdir packed released # empty, and packed must exist for npm pack
+          npm pack --workspaces --pack-destination packed
+          gh release download "$TAG" --pattern '*.tgz' --dir released
+          if ! diff <(cd packed && ls) <(cd released && ls); then
+            echo "::error::The release's tarballs aren't the ones this build packs (names above)."
+            exit 1
+          fi
+          for built in packed/*.tgz; do
+            name=$(basename "$built")
+            a=$(sha256sum "$built" | cut -d' ' -f1)
+            b=$(sha256sum "released/$name" | cut -d' ' -f1)
+            echo "$name: built $a, released $b"
+            if [ "$a" != "$b" ]; then
+              echo "::error::$name built here differs from the one attached to the release."
+              exit 1
+            fi
+          done
+
+      # Each package's publishConfig sets access=public and provenance=true. Fails if a version is already on npm.
+      - run: npm publish --workspaces

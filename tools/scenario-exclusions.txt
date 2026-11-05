@@ -1,0 +1,38 @@
+# Test fixtures whose cases the scenario extractor does NOT export (it still lists their test names,
+# marked as excluded, so they stay visible). One rule per line: <fixture full name or prefix*>  # reason
+# Prefix rules end with '*'. Matching is on NUnit fixture full names (namespace.class[+nested]).
+
+# Not ported (docs/api-differences.md)
+NodaTime.Test.HighPerformance.*        # HighPerformance types are .NET-specific
+NodaTime.Test.Xml.*                    # XML serialization
+NodaTime.Test.Annotations.*            # attribute/reflection checks on the .NET assembly
+NodaTime.Test.Text.TypeConvertersTest  # TypeConverters
+NodaTime.Test.TypeInitializationTest   # .NET type-initialization order
+NodaTime.Test.ExceptionConstructorTests # .NET exception constructors
+
+# Data depends on the host (time zones from the OS, the current time)
+NodaTime.Test.TimeZones.BclDateTimeZoneTest*        # host TimeZoneInfo data
+NodaTime.Test.TimeZones.BclDateTimeZoneSourceTest   # host TimeZoneInfo data
+NodaTime.Test.TimeZones.TzdbDateTimeZoneSourceTest.GuessZoneIdByTransitionsUncached # cases are the host's TimeZoneInfo zones
+NodaTime.Test.SystemClockTest                        # current time
+
+# Non-ISO calendars other than Gregorian, Julian and Coptic (not ported)
+NodaTime.Test.Calendars.BadiCalendarSystemTest              # non-ISO calendar
+NodaTime.Test.Calendars.HebrewCalendarSystemTest            # non-ISO calendar
+NodaTime.Test.Calendars.HebrewMonthConverterTest            # non-ISO calendar
+NodaTime.Test.Calendars.HebrewScripturalCalculatorTest      # non-ISO calendar
+NodaTime.Test.Calendars.IslamicCalendarSystemTest           # non-ISO calendar
+NodaTime.Test.Calendars.PersianCalendarSystemTest           # non-ISO calendar
+NodaTime.Test.Calendars.UmAlQuraYearMonthDayCalculatorTest  # non-ISO calendar
+
+# BCL interop (not ported)
+NodaTime.Test.Extensions.DateOnlyExtensionsTest             # BCL interop
+NodaTime.Test.Extensions.DateTimeExtensionsTest             # BCL interop
+NodaTime.Test.Extensions.DateTimeOffsetExtensionsTest       # BCL interop
+NodaTime.Test.Extensions.DayOfWeekExtensionsTest            # BCL interop
+NodaTime.Test.Extensions.StopwatchExtensionsTest            # BCL interop
+NodaTime.Test.Extensions.TimeOnlyExtensionsTest             # BCL interop
+NodaTime.Test.Extensions.TimeProviderOnlyExtensionsTest     # BCL interop
+NodaTime.Test.Extensions.TimeSpanExtensionsTest             # BCL interop
+NodaTime.Test.Utility.BclConversionsTest                    # BCL interop
+NodaTime.Test.DateTimeZoneProvidersTest                     # static provider registry (not ported)
