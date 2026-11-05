@@ -1,0 +1,9 @@
+# Editor settings for the whole repo (Rider/ReSharper, Visual Studio, VS Code with the EditorConfig extension, ...).
+# tools/.editorconfig adds the C# naming rules.
+root = true
+
+[*]
+# LF, as .gitattributes stores every file: editors then write the same bytes git checks out.
+end_of_line = lf
+# UTF-8 without a BOM.
+charset = utf-8

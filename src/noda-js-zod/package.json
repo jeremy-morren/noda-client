@@ -1,0 +1,51 @@
+{
+  "name": "noda-js-zod",
+  "version": "0.0.0-development",
+  "description": "Zod schemas for noda-js: parse and validate NodaTime's JSON formats into noda-js values (NodaZ.Instant, ...).",
+  "keywords": [
+    "nodatime",
+    "noda-js",
+    "zod",
+    "schema",
+    "validation"
+  ],
+  "homepage": "https://github.com/jeremy-morren/noda-js#readme",
+  "bugs": {
+    "url": "https://github.com/jeremy-morren/noda-js/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremy-morren/noda-js.git",
+    "directory": "src/noda-js-zod"
+  },
+  "license": "Apache-2.0",
+  "author": "Jeremy Morren",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "**/*.ts",
+    "!dist/**/*.tsbuildinfo",
+    "LICENSE.txt",
+    "NOTICE.txt"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/clean.ps1 dist && tsc -b",
+    "prepack": "pwsh -NoProfile -ExecutionPolicy Bypass -Command \"Copy-Item ../../LICENSE.txt, ../../NOTICE.txt .\"",
+    "check:package": "publint --strict && attw --pack . --profile esm-only"
+  },
+  "peerDependencies": {
+    "noda-js": "0.0.0-development",
+    "zod": "^4.1.0"
+  }
+}

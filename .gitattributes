@@ -1,0 +1,20 @@
+# LF everywhere, on every OS
+* text eol=lf
+
+# Binary files.
+*.nzd binary
+*.tgz binary
+*.zip binary
+*.gz binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.dll binary
+*.exe binary

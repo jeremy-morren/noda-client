@@ -1,0 +1,13 @@
+<Project>
+  <!-- The runtime global.json's SDK ships with (see RollForward in Directory.Build.props). -->
+  <PropertyGroup>
+    <RuntimeFrameworkVersion>$(BundledNETCoreAppPackageVersion)</RuntimeFrameworkVersion>
+  </PropertyGroup>
+  <!-- Every tool executable uses the pinned app-local ICU, so generated data and version headers
+       don't depend on the host's globalization stack (a project that uses no culture data opts out with
+       UseAppLocalIcu=false). -->
+  <ItemGroup Condition="'$(OutputType)' == 'Exe' and '$(UseAppLocalIcu)' != 'false'">
+    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" />
+    <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="$(IcuVersion)" />
+  </ItemGroup>
+</Project>

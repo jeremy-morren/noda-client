@@ -1,0 +1,28 @@
+#requires -Version 7.4
+<#
+.SYNOPSIS
+  Builds the single-file ES module and its release archives (npm run build:module).
+.DESCRIPTION
+  standalone/build.ts writes artifacts/module/noda-js.js and noda-js.js.map; tools/NodaJs.Package then archives them
+  as artifacts/noda-js-module-<version>.zip and .tar.gz (the release assets), at maximum compression. The version is
+  noda-js's (src/noda-js/package.json): the release's, once scripts/set-versions.ps1 has set it, and the placeholder
+  0.0.0-development otherwise.
+  The archives are reproducible, so the release workflow can rebuild them byte for byte: every entry is dated HEAD's
+  commit time, and nothing comes from the machine (see tools/NodaJs.Package/Archive.cs). Needs the .NET SDK that
+  tools/global.json pins.
+#>
+. (Join-Path $PSScriptRoot ci-helpers.ps1)
+
+$artifacts = Join-Path $repo artifacts
+$moduleDir = Join-Path $artifacts module
+$files = 'noda-js.js', 'noda-js.js.map'
+$version = (Get-Content -Raw (Join-Path $repo src/noda-js/package.json) | ConvertFrom-Json).version
+$archive = Join-Path $artifacts "noda-js-module-$version"
+
+node (Join-Path $repo standalone/build.ts)
+
+# Archives from an earlier build (another version) would otherwise be left beside the new ones.
+Get-ChildItem $artifacts -File -Filter 'noda-js-module-*' -ErrorAction Ignore | Remove-Item
+$commitTime = git -C $repo log -1 --format=%cI HEAD
+Invoke-NodaJsPackage zip "$archive.zip" @files --directory $moduleDir --time $commitTime
+Invoke-NodaJsPackage tar-gzip "$archive.tar.gz" @files --directory $moduleDir --time $commitTime
