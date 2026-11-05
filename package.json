@@ -36,9 +36,9 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
-    "@types/node": "^22.10.0",
-    "@vitest/browser": "3.2.7",
-    "@vitest/coverage-v8": "3.2.7",
+    "@types/node": "^26.6.6",
+    "@vitest/browser": "5.0.5",
+    "@vitest/coverage-v8": "5.0.5",
     "esbuild": "^0.28.2",
     "eslint": "^10.14.0",
     "eslint-plugin-es-x": "^10.1.0",
@@ -46,9 +46,9 @@
     "playwright": "1.64.1",
     "publint": "^0.3.25",
     "rollup": "^4.67.5",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.72.1",
-    "vitest": "3.2.7",
+    "vitest": "5.0.5",
     "zod": "^4.6.7"
   }
 }
