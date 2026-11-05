@@ -84,7 +84,7 @@ jobs:
       # that these digests were built by this workflow from this commit. The npm tarballs get theirs from npm
       # provenance. Verify with: gh attestation verify noda-js-module.zip --repo jeremy-morren/noda-js
       - name: Attest the single-file module
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             artifacts/noda-js-module.zip
