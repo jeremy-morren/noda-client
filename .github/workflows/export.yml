@@ -30,7 +30,7 @@ jobs:
       - run: pwsh -NoProfile -File tools/generate.ps1
       - run: npm run typecheck
       - run: npm test
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         with:
           branch: automated/export
           title: "Regenerate data from .NET / NodaTime / IANA / CLDR"
