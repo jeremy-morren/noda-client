@@ -1,0 +1,11 @@
+<Project>
+  <!-- NuGet audit advisories that don't affect the tools, each with the reason. Imported by Directory.Build.props (the
+       tools) and by the NodaTime clone's src/Directory.Build.props (NodaTime.props), because NodaTime's build treats
+       audit warnings as errors. Remove an entry once NodaTimeVersion brings the fixed package. -->
+  <ItemGroup>
+    <!-- SharpCompress <= 0.47.4: path traversal in IArchive.WriteToDirectory (CVE-2026-44788). NodaTime 3.3.0's
+         TzdbCompiler (FileSource.FromArchive) uses 0.42.1 only to read tzdata entries into memory, never extracting to
+         disk; the fixed versions (0.48.0+) removed the TarReader.Open it calls, so it can't be overridden. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Solution>
+  <Project Path="NodaJs.Package/NodaJs.Package.csproj" />
+  <Project Path="NodaJs.Tools/NodaJs.Tools.csproj" />
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="cultures.txt" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="Directory.Packages.props" />
+    <File Path="generate.ps1" />
+    <File Path="global.json" />
+    <File Path="NodaTime.props" />
+    <File Path="NuGetAudit.props" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+    <File Path="scenario-exclusions.txt" />
+  </Folder>
+</Solution>

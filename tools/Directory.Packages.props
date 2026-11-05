@@ -1,0 +1,21 @@
+<Project>
+  <!-- Central package management: every package version used by the tools is set here, and projects
+       reference packages without a Version. (The NodaTime projects in ../.nodatime have their own.) -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <!-- The NodaTime release noda-js ports: also its git tag, which NodaJs.Tools' PrepareNodaTime target clones into
+         .nodatime/<version>/ (NodaTimeRoot). The tools build against that clone's projects, not the NodaTime package;
+         the NodaTime PackageVersion below is how Dependabot sees (and bumps) it. NodaJs.Tools embeds it as assembly
+         metadata (NodaTimeVersion). -->
+    <NodaTimeVersion>3.3.0</NodaTimeVersion>
+    <NodaTimeRoot>$(MSBuildThisFileDirectory)../.nodatime/$(NodaTimeVersion)/</NodaTimeRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- IcuVersion (Directory.Build.props) also sets the app-local ICU version in Directory.Build.targets. -->
+    <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="$(IcuVersion)" />
+    <PackageVersion Include="NodaTime" Version="$(NodaTimeVersion)" />
+    <PackageVersion Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.14" />
+  </ItemGroup>
+</Project>

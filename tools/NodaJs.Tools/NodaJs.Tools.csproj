@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- NodaTime.Test brings NUnit and Microsoft.Testing.Platform, which would generate a test-runner entry point
+         that competes with Program.cs (warning CS7022). This is a generator, not a test project. -->
+    <GenerateTestingPlatformEntryPoint>false</GenerateTestingPlatformEntryPoint>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The NodaTime version the tool was built against (Directory.Packages.props); ToolEnvironment reads it. -->
+    <AssemblyMetadata Include="NodaTimeVersion" Value="$(NodaTimeVersion)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The golden JSON scenarios: NodaTime's own JSON serializer. -->
+    <PackageReference Include="NodaTime.Serialization.SystemTextJson" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(NodaTimeRoot)src/NodaTime/NodaTime.csproj" />
+    <!-- NodaTime's own tzdb compiler and CLDR windowsZones.xml parser (data tzdb, cldr). -->
+    <ProjectReference Include="$(NodaTimeRoot)src/NodaTime.TzdbCompiler/NodaTime.TzdbCompiler.csproj" />
+    <!-- The test assembly whose NUnit tests the scenarios command enumerates (brings NodaTime.Testing and NUnit). -->
+    <ProjectReference Include="$(NodaTimeRoot)src/NodaTime.Test/NodaTime.Test.csproj" 
+                      SetTargetFramework="TargetFramework=$(TargetFramework)" />
+  </ItemGroup>
+
+  <!-- The NodaTime clone the references above point at: cloned at NodaTimeVersion (its git tag) into NodaTimeRoot if
+       it isn't there, then prepared for this build: our nuget.config (NodaTime rejects multiple package sources without
+       source mapping) and src/Directory.Build.props (../NodaTime.props: our NuGet audit suppressions).
+       It runs before restore walks the project references (_GenerateRestoreProjectPathWalk, whether the build starts
+       from this project or the solution; Restore itself is too late, as it works out the project graph first).
+       Incremental: the stamp, touched last, is named for NodaTimeVersion and lives in the clone, so a new version (a
+       new NodaTimeRoot), a deleted clone or a changed input runs it again. -->
+  <PropertyGroup>
+    <NodaTimeStamp>$(NodaTimeRoot)noda-js-$(NodaTimeVersion).stamp</NodaTimeStamp>
+  </PropertyGroup>
+  <Target Name="PrepareNodaTime" BeforeTargets="_GenerateRestoreProjectPathWalk"
+          Inputs="$(MSBuildThisFileDirectory)../Directory.Packages.props;$(MSBuildThisFileDirectory)../nuget.config;$(MSBuildThisFileDirectory)../NodaTime.props"
+          Outputs="$(NodaTimeStamp)">
+    <Exec Condition="!Exists('$(NodaTimeRoot).git')"
+          Command="git -c advice.detachedHead=false clone --quiet --depth 1 --branch &quot;$(NodaTimeVersion)&quot; https://github.com/nodatime/nodatime.git &quot;$(NodaTimeRoot.TrimEnd('/'))&quot;" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../nuget.config" DestinationFolder="$(NodaTimeRoot)" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../NodaTime.props" DestinationFiles="$(NodaTimeRoot)src/Directory.Build.props" />
+    <Touch Files="$(NodaTimeStamp)" AlwaysCreate="true" />
+  </Target>
+</Project>

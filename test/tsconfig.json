@@ -1,0 +1,58 @@
+// Tests run on Node (>= 24) and in browsers, so they can use a newer runtime library than the packages in
+// src/ (ES2015; see ../tsconfig.base.json) and Node's types. `npm run typecheck` checks both configurations.
+// `paths` points the noda-js package at its sources (as vitest.config.ts does), so the companion packages and the
+// tests share one copy of the core.
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ],
+    "noEmit": true,
+    "paths": {
+      "noda-js": [
+        "../src/noda-js/index.ts"
+      ],
+      "noda-js/tzdb": [
+        "../src/noda-js/entries/tzdb.ts"
+      ],
+      "noda-js/tzdb/bundled": [
+        "../src/noda-js/entries/tzdb-bundled.ts"
+      ],
+      "noda-js/browser": [
+        "../src/noda-js/entries/browser.ts"
+      ],
+      "noda-js/testing": [
+        "../src/noda-js/entries/testing.ts"
+      ],
+      "noda-js/cultures": [
+        "../src/noda-js/Cultures/index.generated.ts"
+      ],
+      "noda-js/cultures/all": [
+        "../src/noda-js/Cultures/all.generated.ts"
+      ],
+      "noda-js/windows": [
+        "../src/noda-js/entries/windows.ts"
+      ],
+      "noda-js/linq": [
+        "../src/noda-js/entries/linq.ts"
+      ]
+    }
+  },
+  "include": [
+    "../src/**/*.ts",
+    "../standalone/**/*.ts",
+    "../eslint.config.ts",
+    "../eslint-rules/**/*.ts",
+    "."
+  ],
+  "exclude": [
+    "../src/*/dist",
+    "../src/*/node_modules"
+  ]
+}

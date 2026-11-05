@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Makes the single-file module's release archives (scripts/build-module.ps1 runs it). It uses only .NET's own
+       libraries (no NodaTime), so the release workflows build it without fetching NodaTime. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- No app-local ICU (Directory.Build.targets): archiving doesn't use culture data. -->
+    <UseAppLocalIcu>false</UseAppLocalIcu>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+</Project>

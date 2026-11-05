@@ -1,0 +1,126 @@
+name: release
+
+# Publishes the packages to npm, then to GitHub Packages (the github-packages job, renamed @<owner>/<name>), when a
+# GitHub release is published: normally the draft that draft-release.yml created
+# (tag vMAJOR.MINOR.PATCH, with the packed tarballs attached). The version comes from the tag; it must be in the root
+# package.json's major.minor, and the released commit mustn't be tagged with another version.
+#
+# Before publishing, this rebuilds at the tag, runs every check, and confirms every asset attached to the release (the
+# npm tarballs and the noda-js-module archives) is byte-identical to the one it builds (the build is reproducible), so
+# what was reviewed is what ships.
+#
+# Uses npm trusted publishing (OIDC): no npm token is stored anywhere, and npm generates a provenance attestation
+# linking each package to this workflow run and commit. One-time setup on npmjs.com, per package (noda-js,
+# noda-js-zod): Settings → Trusted publishing → GitHub Actions, repository jeremy-morren/noda-js, workflow
+# release.yml, environment npm. (npm only allows that once a package exists, so the very first version of a new
+# package name is published by hand.) npm never accepts the same version twice, so a version that was published
+# can't be released again, even if its GitHub release was deleted.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing and provenance, and for signing attestations
+  attestations: write # the single-file module's build provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags, for the HEAD tag check
+      # No registry-url: setup-node would then set NODE_AUTH_TOKEN, which overrides the OIDC flow.
+      # No caches anywhere in this workflow: a publishing run must not restore anything another run could have written (cache poisoning).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # The latest npm, as npm recommends for trusted publishing (it needs npm 11.5.1 or later).
+      # The pinned SDK, for tools/NodaJs.Package (npm run build:module's archives).
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: tools/global.json
+      - name: Update npm
+        run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm audit signatures
+
+      # Each step's logic is a script in scripts/ (shared with draft-release.yml), so it can be run and checked locally.
+      - name: Version from the tag
+        id: version
+        run: pwsh -NoProfile -File scripts/version-from-tag.ps1 -Tag "$TAG"
+      - name: HEAD isn't tagged with another version
+        run: pwsh -NoProfile -File scripts/check-head-tag.ps1 -Version '${{ steps.version.outputs.version }}'
+      - name: Set the package versions
+        run: pwsh -NoProfile -File scripts/set-versions.ps1 -Version '${{ steps.version.outputs.version }}'
+
+      - run: npm run typecheck
+      - run: npm run lint
+      # The tests run on Node and in Chromium, Firefox and WebKit, as in ci.yml (browsers downloaded fresh: no cache).
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:package
+      - run: npm run check:reproducible
+
+      # The release's assets, built as draft-release.yml builds them, must be byte-identical to the attached ones. (The
+      # module archives are made by tools/NodaJs.Package on the pinned .NET runtime.)
+      - run: npm run build:module
+      - name: Pack
+        run: npm pack --workspaces --pack-destination artifacts
+      - name: The release's assets match this build
+        run: pwsh -NoProfile -File scripts/compare-release-assets.ps1 -Tag "$TAG" -Built artifacts
+      # Build provenance for the single-file module: a Sigstore-signed statement, stored by GitHub (not in the files),
+      # that these digests were built by this workflow from this commit. The npm tarballs get theirs from npm
+      # provenance. Verify with: gh attestation verify noda-js-module.zip --repo jeremy-morren/noda-js
+      - name: Attest the single-file module
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/noda-js-module.zip
+            artifacts/noda-js-module.tar.gz
+            artifacts/module/noda-js.js
+            artifacts/module/noda-js.js.map
+
+      # Each package's publishConfig sets access=public and provenance=true. Fails if a version is already on npm.
+      - run: npm publish --workspaces
+
+  # GitHub Packages: the same tarballs, renamed @<owner>/<name> (see scripts/publish-github-packages.ps1). A separate
+  # job, so that it can be re-run on its own if it fails after npm succeeded.
+  github-packages:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # download the release's tarballs
+      packages: write # publish to GitHub Packages
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4 # the script
+      # The pinned SDK, for tools/NodaJs.Package (unpacking the tarballs).
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: tools/global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          # Writes an .npmrc that authenticates npm.pkg.github.com with NODE_AUTH_TOKEN.
+          registry-url: https://npm.pkg.github.com
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -File scripts/publish-github-packages.ps1 -Tag "$TAG" -Owner "$GITHUB_REPOSITORY_OWNER"

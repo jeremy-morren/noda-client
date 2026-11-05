@@ -1,0 +1,7 @@
+<Project>
+  <!-- Copied into the NodaTime clone as src/Directory.Build.props by NodaJs.Tools' PrepareNodaTime target (NodaTime has
+       none there), so every NodaTime project the tools build gets NodaTime's own settings and then our NuGet audit
+       suppressions, without editing NodaTime's files. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
+  <Import Project="$(MSBuildThisFileDirectory)../../../tools/NuGetAudit.props" />
+</Project>
