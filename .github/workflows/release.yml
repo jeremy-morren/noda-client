@@ -1,0 +1,100 @@
+name: release
+
+# Publishes the packages to npm when a GitHub release is published: normally the draft that draft-release.yml created
+# (tag vMAJOR.MINOR.PATCH, with the packed tarballs attached). The version comes from the tag; it must be in the root
+# package.json's major.minor, and the released commit mustn't be tagged with another version.
+#
+# Before publishing, this rebuilds at the tag, runs every check, and confirms the tarballs it would publish are
+# byte-identical to the ones attached to the release (the build is reproducible), so what was reviewed is what ships.
+#
+# Uses npm trusted publishing (OIDC): no npm token is stored anywhere, and npm generates a provenance attestation
+# linking each package to this workflow run and commit. One-time setup on npmjs.com, per package (noda-js,
+# noda-js-zod): Settings → Trusted publishing → GitHub Actions, repository jeremy-morren/noda-js, workflow
+# release.yml, environment npm. (npm only allows that once a package exists, so the very first version of a new
+# package name is published by hand.) npm never accepts the same version twice, so a version that was published
+# can't be released again, even if its GitHub release was deleted.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags, for the HEAD tag check
+      # No registry-url: setup-node would then set NODE_AUTH_TOKEN, which overrides the OIDC flow.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm audit signatures
+
+      - name: Version from the tag
+        id: version
+        run: |
+          if ($env:TAG -notmatch '^v(\d+\.\d+)\.\d+$') {
+            throw "Release tags are vMAJOR.MINOR.PATCH, not '$env:TAG'."
+          }
+          $majorMinor = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($Matches[1] -ne $majorMinor) {
+            throw "The tag $env:TAG isn't in the root package.json's major.minor ($majorMinor)."
+          }
+          "version=$($env:TAG.Substring(1))" >> $env:GITHUB_OUTPUT
+      - name: HEAD isn't tagged with another version
+        run: ./scripts/check-head-tag.ps1 -Version ${{ steps.version.outputs.version }}
+      - name: Set the package versions
+        run: ./scripts/set-version.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - run: npm run typecheck
+      - run: npm run lint
+      # The tests run on Node and in Chromium, Firefox and WebKit, as in ci.yml.
+      - name: Playwright version
+        id: playwright
+        run: '"version=$((Get-Content node_modules/playwright/package.json | ConvertFrom-Json).version)" >> $env:GITHUB_OUTPUT'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:package
+      - run: npm run check:reproducible
+
+      - name: The tarballs match the release's
+        run: |
+          ./scripts/clean.ps1 packed released # empty, and packed must exist for npm pack
+          npm pack --workspaces --pack-destination packed
+          if ($LASTEXITCODE -ne 0) { throw 'npm pack failed' }
+          gh release download $env:TAG --pattern '*.tgz' --dir released
+          if ($LASTEXITCODE -ne 0) { throw "Couldn't download the tarballs attached to $env:TAG" }
+          $packed = @(Get-ChildItem packed -Filter *.tgz | Sort-Object Name)
+          $released = @(Get-ChildItem released -Filter *.tgz | Sort-Object Name)
+          if (($packed.Name -join ',') -ne ($released.Name -join ',')) {
+            throw "The release has $($released.Name -join ', '), but this build packs $($packed.Name -join ', ')."
+          }
+          for ($i = 0; $i -lt $packed.Count; $i++) {
+            $a = (Get-FileHash -Algorithm SHA256 $packed[$i].FullName).Hash
+            $b = (Get-FileHash -Algorithm SHA256 $released[$i].FullName).Hash
+            Write-Host "$($packed[$i].Name): built $a, released $b"
+            if ($a -ne $b) { throw "$($packed[$i].Name) built here differs from the one attached to the release." }
+          }
+
+      # Each package's publishConfig sets access=public and provenance=true. Fails if a version is already on npm.
+      - run: npm publish --workspaces

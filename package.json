@@ -1,0 +1,54 @@
+{
+  "name": "noda-js-workspace",
+  "private": true,
+  "description": "Workspace for noda-js and its companion packages (see README.md).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "version": "0.2",
+  "workspaces": [
+    "src/noda-js",
+    "src/noda-js-zod"
+  ],
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.5.1",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "build": "pwsh -NoProfile -File scripts/clean.ps1 src/noda-js/dist src/noda-js-zod/dist && tsc -b src/noda-js src/noda-js-zod",
+    "lint": "eslint src",
+    "typecheck": "tsc -b src/noda-js src/noda-js-zod && tsc -p test/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:node": "vitest run --project node",
+    "test:browser": "vitest run --project chromium --project firefox --project webkit",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --coverage --reporter=default --reporter=./test/vitest/junit-reporter.ts --outputFile.junit=test-results/junit.xml",
+    "generate": "pwsh -NoProfile -File tools/generate.ps1",
+    "check:package": "npm run check:package --workspaces && tsc -p test/package/tsconfig.json",
+    "check:reproducible": "pwsh -NoProfile -File scripts/check-reproducible.ps1"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@types/node": "^22.10.0",
+    "@vitest/browser": "3.2.7",
+    "@vitest/coverage-v8": "3.2.7",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-es-x": "^10.1.0",
+    "linq-to-typescript": "^12.1.1",
+    "playwright": "1.64.1",
+    "publint": "^0.3.25",
+    "rollup": "^4.67.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "3.2.7",
+    "zod": "^4.6.7"
+  }
+}

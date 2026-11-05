@@ -1,0 +1,77 @@
+name: draft release
+
+# On every push to main: works out the next version, builds and packs the packages with it, and creates a draft
+# GitHub release with the tarballs attached. Publishing the draft (by hand) runs release.yml, which publishes to npm.
+#
+# The version: major.minor from the root package.json (maintained by hand, e.g. "0.2"); the patch is one more than the
+# highest published release of that major.minor, or 0 (scripts/release-version.ps1). Until a draft is published, each
+# push replaces it (same version, new commit): the old draft and any leftover tag for the version are deleted first.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create and delete releases and tags
+
+# One draft at a time: a newer push supersedes a run in progress.
+concurrency:
+  group: draft-release
+  cancel-in-progress: true
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags, for the HEAD tag check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Next version
+        id: version
+        run: ./scripts/release-version.ps1
+      - name: HEAD isn't already released as another version
+        run: ./scripts/check-head-tag.ps1 -Version ${{ steps.version.outputs.version }}
+      - name: Set the package versions
+        run: ./scripts/set-version.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - run: npm run build
+      - run: npm run check:package
+      - name: Pack
+        run: |
+          ./scripts/clean.ps1 artifacts # empty, and it must exist for npm pack
+          npm pack --workspaces --pack-destination artifacts
+          if ($LASTEXITCODE -ne 0) { throw 'npm pack failed' }
+
+      - name: Replace an earlier draft and leftover tag for this version
+        run: |
+          $tag = 'v${{ steps.version.outputs.version }}'
+          $drafts = gh release list --limit 1000 --json tagName,isDraft | ConvertFrom-Json | Where-Object { $_.isDraft -and $_.tagName -eq $tag }
+          foreach ($draft in $drafts) {
+            Write-Host "Deleting the earlier draft release $tag"
+            gh release delete $tag --yes
+            if ($LASTEXITCODE -ne 0) { throw "Couldn't delete the draft release $tag" }
+          }
+          # A tag without a published release: left over from a release that was deleted (or unpublished).
+          if (git ls-remote --tags origin "refs/tags/$tag") {
+            Write-Host "Deleting the leftover tag $tag"
+            git push origin --delete "refs/tags/$tag"
+            if ($LASTEXITCODE -ne 0) { throw "Couldn't delete the tag $tag" }
+          }
+
+      - name: Create the draft release
+        run: |
+          $tag = 'v${{ steps.version.outputs.version }}'
+          gh release create $tag (Get-ChildItem artifacts/*.tgz) --draft --target $env:GITHUB_SHA --title $tag --generate-notes
+          if ($LASTEXITCODE -ne 0) { throw "Couldn't create the draft release $tag" }

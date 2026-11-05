@@ -1,0 +1,8 @@
+<Project>
+  <!-- Every tool executable uses the pinned app-local ICU, so generated data and version headers
+       don't depend on the host's globalization stack. -->
+  <ItemGroup Condition="'$(OutputType)' == 'Exe'">
+    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" />
+    <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="$(IcuVersion)" />
+  </ItemGroup>
+</Project>
