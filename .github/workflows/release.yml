@@ -39,7 +39,7 @@ jobs:
       # No registry-url: setup-node would then set NODE_AUTH_TOKEN, which overrides the OIDC flow.
       # No caches anywhere in this workflow: a publishing run must not restore anything another run could have written
       # (cache poisoning).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       # The latest npm, as npm recommends for trusted publishing (it needs npm 11.5.1 or later).

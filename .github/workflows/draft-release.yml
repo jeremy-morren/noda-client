@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0 # tags, for the HEAD tag check
       # No cache: this run builds the tarballs attached to the release, so it mustn't restore anything another run
       # could have written (cache poisoning).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: npm ci
