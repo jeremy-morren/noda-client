@@ -1,0 +1,49 @@
+name: release
+
+# Publishes every package in src/ (the npm workspaces) to npm when a GitHub release is published. They are
+# versioned together: the tag vX.Y.Z must match each package.json.
+# Uses npm trusted publishing (OIDC): no npm token is stored anywhere, and npm generates a provenance
+# attestation linking the package to this workflow run and commit. One-time setup on npmjs.com, per
+# package (noda-js, noda-js-zod): Settings → Trusted publishing → GitHub Actions, repository jeremy-morren/noda-js, workflow
+# release.yml, environment npm. (npm only allows that once a package exists, so the very first version of a
+# new package name is published by hand.)
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # OIDC token for npm trusted publishing and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      # No registry-url: setup-node would then set NODE_AUTH_TOKEN, which overrides the OIDC flow.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Check the tag matches every package version
+        run: |
+          foreach ($manifest in Get-ChildItem src -Directory | ForEach-Object { Join-Path $_.FullName package.json } | Where-Object { Test-Path $_ }) {
+            $package = Get-Content $manifest -Raw | ConvertFrom-Json
+            if ("${{ github.event.release.tag_name }}" -ne "v$($package.version)") {
+              throw "Release tag ${{ github.event.release.tag_name }} doesn't match $($package.name) v$($package.version)"
+            }
+          }
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:package
+      - run: npm run check:reproducible
+      # Each package's publishConfig sets access=public and provenance=true.
+      - run: npm publish --workspaces

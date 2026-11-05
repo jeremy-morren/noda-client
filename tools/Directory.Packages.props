@@ -1,0 +1,14 @@
+<Project>
+  <!-- Central package management: every package version used by the tools is set here, and projects
+       reference packages without a Version. (The NodaTime projects in ../.nodatime have their own.) -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- IcuVersion (Directory.Build.props) also sets the app-local ICU version in Directory.Build.targets. -->
+    <PackageVersion Include="Microsoft.ICU.ICU4C.Runtime" Version="$(IcuVersion)" />
+    <PackageVersion Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.14" />
+  </ItemGroup>
+</Project>
