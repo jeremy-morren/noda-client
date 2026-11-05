@@ -33,11 +33,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.event.release.tag_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # tags, for the HEAD tag check
       # No registry-url: setup-node would then set NODE_AUTH_TOKEN, which overrides the OIDC flow.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -66,7 +66,7 @@ jobs:
       - name: Playwright version
         id: playwright
         run: '"version=$((Get-Content node_modules/playwright/package.json | ConvertFrom-Json).version)" >> $env:GITHUB_OUTPUT'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
