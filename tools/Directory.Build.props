@@ -1,20 +1,15 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <!-- The tools run on exactly the runtime global.json's SDK ships with (RuntimeFrameworkVersion, set in
-         Directory.Build.targets once the SDK has defined it), with no roll-forward to a newer patch, so the generated
-         files and NodaJs.Package's archives don't change with whichever .NET 10 runtimes a machine has. Bumping the SDK
-         in global.json (Dependabot's dotnet-sdk updates) bumps the runtime with it. -->
+    <!-- Exactly the runtime global.json's SDK ships with (Directory.Build.targets), so output doesn't vary by machine. -->
     <RollForward>Disable</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <!-- Pin ICU so culture data is identical on every OS (app-local ICU instead of the system's). -->
+    <!-- App-local ICU, so culture data is identical on every OS. -->
     <IcuVersion>72.1.0.3</IcuVersion>
-    <!-- Reproducible builds: deterministic compilation, packages.lock.json per project (restore fails in CI if
-         the lock files are stale; re-run `dotnet restore tools/NodaJs.Tools.slnx` locally after changing a
-         package or NodaTimeVersion), and CI-normalised source paths. -->
+    <!-- After changing a package or NodaTimeRef, run `dotnet restore tools/NodaJs.Tools.slnx`: CI restores locked. -->
     <Deterministic>true</Deterministic>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>

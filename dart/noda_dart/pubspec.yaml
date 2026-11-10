@@ -1,0 +1,33 @@
+name: noda_dart
+description: >-
+  A line-for-line Dart port of NodaTime: dates, times, time zones (bundled tzdb, the system's own, and a tzdb compiler),
+  calendars, cultures, formatting and parsing. Runs everywhere Flutter and Dart run.
+# Set in the packed copy (dart/scripts/package/pack.ts --version).
+version: 0.0.0-dev
+repository: https://github.com/jeremy-morren/noda-client
+homepage: https://github.com/jeremy-morren/noda-client/tree/main/dart/noda_dart
+topics: [date, time, timezone, calendar, nodatime]
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  meta: ^1.15.0
+
+dev_dependencies:
+  # test/api: reads the public API statically.
+  analyzer: ^14.7.0
+  coverage: ^1.15.0
+  lints: ^6.0.0
+  # Shared with the Flutter test app.
+  system_source_checks:
+    path: ../test_apps/system_source_checks
+  test: ^1.26.0

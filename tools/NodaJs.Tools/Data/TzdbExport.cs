@@ -1,79 +1,111 @@
-using System.Reflection;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using NodaJs.Tools.Common;
 using NodaTime.TimeZones;
 
 namespace NodaJs.Tools.Data;
 
+/// <summary>An NZD file and where it came from.</summary>
+internal sealed record TzdbSource(byte[] NzdData, string Origin);
+
 /// <summary>
-/// The bundled tzdb: an NZD file (NodaTime's compiled tz format), as base64 in a TS module. Sources:
-/// <list type="bullet">
-/// <item>"compile" (default): compile it ourselves with NodaTime's own TzdbCompiler, from the latest IANA
-/// release and the latest CLDR windowsZones.xml, so new tz data doesn't wait for a nodatime.org release.</item>
-/// <item>"latest": the NZD published by nodatime.org (https://nodatime.org/tzdb/latest.txt).</item>
-/// <item>"embedded": the Tzdb.nzd embedded in the pinned NodaTime build (deterministic, offline).</item>
-/// </list>
+/// The bundled NZD, as base64: "compile" (NodaTime's TzdbCompiler on the latest IANA and CLDR releases,
+/// so new tz data doesn't wait for nodatime.org), "latest" (nodatime.org's), or "embedded" (the pinned NodaTime's; offline).
 /// </summary>
 internal static class TzdbExport
 {
-    /// <summary>Where the compiled tzdata tarball is kept as a test fixture (relative to the repo root).</summary>
-    private const string TzdataFixtureDirectory = "test/fixtures/tzdb";
+    private const string TzdataFixtureDirectory = ToolEnvironment.TestData + "/tzdb";
 
-    public static async Task Run(GeneratedFiles output, string source, string? tzdataSource, string? cldrSource)
+    public static void Run(GeneratedFiles output, string source, string? tzdataSource, string? cldrSource)
     {
-        var (data, origin) = source switch
+        var tzdbSource = source switch
         {
-            "compile" => await Compile(output, tzdataSource ?? Downloads.IanaTzdataLatest, cldrSource),
-            "latest" => await DownloadLatest(),
+            "compile" => Compile(output, tzdataSource ?? Downloads.IanaTzdataLatest, cldrSource),
+            "latest" => DownloadLatest(),
             "embedded" => Embedded(),
             _ => throw new ArgumentException($"Unknown tzdb source '{source}' (expected compile, latest or embedded)"),
         };
+        var data = tzdbSource.NzdData;
 
-        // Check NodaTime can load and validate it before we bundle it.
         var tzdb = TzdbDateTimeZoneSource.FromStream(new MemoryStream(data));
         tzdb.Validate();
         var sha256 = Convert.ToHexStringLower(SHA256.HashData(data));
 
-        var body = new TypescriptWriter()
-            .DocComment("The tzdb release in the bundled data, e.g. \"2025b\".")
-            .WriteLine($"export const tzdbVersion = {Ts.Str(tzdb.TzdbVersion)};", emptyLineAfter: true)
-            .DocComment("NodaTime's version ID for the bundled data.")
-            .WriteLine($"export const versionId = {Ts.Str(tzdb.VersionId)};", emptyLineAfter: true)
-            .DocComment("SHA-256 of the NZD bytes.")
-            .WriteLine($"export const sha256 = {Ts.Str(sha256)};", emptyLineAfter: true)
-            .DocComment("Number of canonical zone IDs.")
-            .WriteLine($"export const zoneCount = {tzdb.CanonicalIdMap.Values.Distinct().Count()};", emptyLineAfter: true)
-            .DocComment($"The NZD file ({data.Length} bytes), base64-encoded.")
-            .WriteLine($"export const nzdBase64 = {Ts.Str(Convert.ToBase64String(data))};");
-        output.Write("src/noda-js/TimeZones/TzdbBundledData.generated.ts", "tzdb", body,
-            [$"Source: {origin}", "tz data is public domain; the CLDR Windows mapping in it is under the Unicode License (see NOTICE.txt)."]);
+        var zoneCount = tzdb.CanonicalIdMap.Values.Distinct().Count();
+        var base64 = Convert.ToBase64String(data);
+        var latin1LiteralSize = System.Text.Encoding.UTF8.GetByteCount(Dart.Str(System.Text.Encoding.Latin1.GetString(data)));
+        foreach (var port in LangTarget.All)
+        {
+            var body = port.NewWriter();
+            string Const(string name, string dartType, string value) => body switch
+            {
+                TypescriptWriter => $"export const {name} = {value};",
+                DartWriter => $"const {dartType} {name} = {value};",
+                _ => body.ThrowUnknown<string>(),
+            };
+            switch (body)
+            {
+                case TypescriptWriter:
+                    break;
+                case DartWriter:
+                    body.WriteLine("import 'dart:convert';")
+                        .WriteLine("import 'dart:typed_data';", emptyLineAfter: true);
+                    break;
+                default:
+                    body.ThrowUnknown();
+                    break;
+            }
+            body.DocComment("The tzdb release in the bundled data, e.g. \"2025b\".")
+                .WriteLine(Const("tzdbVersion", "String", body.Str(tzdb.TzdbVersion)), emptyLineAfter: true)
+                .DocComment("NodaTime's version ID for the bundled data.")
+                .WriteLine(Const("versionId", "String", body.Str(tzdb.VersionId)), emptyLineAfter: true)
+                .DocComment("SHA-256 of the NZD bytes.")
+                .WriteLine(Const("sha256", "String", body.Str(sha256)), emptyLineAfter: true)
+                .DocComment("Number of canonical zone IDs.")
+                .WriteLine(Const("zoneCount", "int", zoneCount.ToString(System.Globalization.CultureInfo.InvariantCulture)), emptyLineAfter: true);
+            switch (body)
+            {
+                case TypescriptWriter:
+                    body.DocComment($"The NZD file ({data.Length} bytes), base64-encoded.")
+                        .WriteLine(Const("nzdBase64", "String", body.Str(base64)));
+                    break;
+                case DartWriter:
+                    body.DocComment($"The NZD file ({data.Length} bytes) as base64: {base64.Length} bytes of source, against {latin1LiteralSize} as a Latin-1 string literal.")
+                        .WriteLine(Const("nzdBase64", "String", body.Str(base64)), emptyLineAfter: true)
+                        .DocComment("The NZD file, decoded on first use.")
+                        .WriteLine("final Uint8List nzdBytes = base64Decode(nzdBase64);");
+                    break;
+                default:
+                    body.ThrowUnknown();
+                    break;
+            }
+            output.Write(port.Source("TimeZones/TzdbBundledData"), "tzdb", body,
+                [$"Source: {tzdbSource.Origin}", "tz data is public domain; the CLDR Windows mapping in it is under the Unicode License (see NOTICE.txt)."]);
+        }
     }
 
-    /// <summary>
-    /// Runs NodaTime.TzdbCompiler (from the pinned NodaTime clone) on IANA tz data and CLDR windowsZones.xml.
-    /// The compiler reloads and validates its output itself.
-    /// </summary>
-    private static async Task<(byte[], string)> Compile(GeneratedFiles output, string tzdata, string? cldrSource)
+    private static TzdbSource Compile(GeneratedFiles output, string tzdata, string? cldrSource)
     {
-        var (windowsZones, cldrOrigin) = await Downloads.CldrWindowsZones(cldrSource);
+        var cldr = Cldr.CldrWindowsZonesFile.Load(cldrSource);
         var work = Path.Combine(Path.GetTempPath(), "noda-js-tzdb-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         try
         {
             var windowsZonesPath = Path.Combine(work, "windowsZones.xml");
             var nzdPath = Path.Combine(work, "tzdb.nzd");
-            windowsZones.Save(windowsZonesPath);
+            cldr.Document.Save(windowsZonesPath);
             var tzdataOrigin = tzdata;
-            tzdata = await LocalVersionedTarball(output, tzdata, work);
+            tzdata = LocalVersionedTarball(output, tzdata, work);
 
             string[] compilerArgs = ["-s", tzdata, "-w", windowsZonesPath, "-o", nzdPath];
             Console.WriteLine($"  NodaTime.TzdbCompiler {string.Join(' ', compilerArgs)}");
-            // The compiler's entry point: see NodaTimeInternals.
-            var exitCode = await NodaTimeInternals.TzdbCompilerMain(null, compilerArgs);
+            var exitCode = NodaTimeInternals.TzdbCompilerMain(null, compilerArgs).GetAwaiter().GetResult();
             if (exitCode != 0)
                 throw new InvalidOperationException($"NodaTime.TzdbCompiler failed with exit code {exitCode}");
-            return (await File.ReadAllBytesAsync(nzdPath),
-                $"compiled by NodaTime.TzdbCompiler {ToolEnvironment.NodaTimeTag} from {tzdataOrigin} ({Path.GetFileName(tzdata)}) and {cldrOrigin}");
+            return new TzdbSource(
+                File.ReadAllBytes(nzdPath),
+                $"compiled by NodaTime.TzdbCompiler {ToolEnvironment.NodaTimeVersion} from {tzdataOrigin} ({Path.GetFileName(tzdata)}) and {cldr.Origin}");
         }
         finally
         {
@@ -82,44 +114,32 @@ internal static class TzdbExport
     }
 
     /// <summary>
-    /// TzdbCompiler infers the tz version from a Makefile or from a "tzdata2026a"-style file name, and
-    /// IANA's data-only tarballs have neither when named "tzdata-latest". So: fetch the tarball, read
-    /// its "version" file, and save it locally, decompressed, as tzdata&lt;version&gt;.tar. (Decompressed because
-    /// TzdbCompiler reads archives with System.Formats.Tar since NodaTime 3.3.6, and only decompresses gzip itself
-    /// when it downloads a file, not for a local file.)
-    /// The tarball, exactly as downloaded, is also kept as test/fixtures/tzdb/tzdata&lt;version&gt;.tar.gz (replacing any
-    /// other release there), so tests can compile the same input with noda-js's own compiler and compare the result
-    /// with the bundled NZD.
+    /// Saves the tarball as tzdata&lt;version&gt;.tar, from its "version" file:
+    /// TzdbCompiler takes the version from the file name.
+    /// Also keeps it as a test fixture.
     /// </summary>
-    private static async Task<string> LocalVersionedTarball(GeneratedFiles output, string tzdata, string work)
+    private static string LocalVersionedTarball(GeneratedFiles output, string tzdata, string work)
     {
         byte[] bytes;
         if (tzdata.StartsWith("http://", StringComparison.Ordinal) || tzdata.StartsWith("https://", StringComparison.Ordinal))
-        {
-            using var client = Downloads.CreateClient();
-            bytes = await client.GetByteArrayAsync(tzdata);
-        }
+            bytes = Downloads.GetBytes(tzdata);
         else if (File.Exists(tzdata))
-        {
-            bytes = await File.ReadAllBytesAsync(tzdata);
-        }
+            bytes = File.ReadAllBytes(tzdata);
         else
-        {
-            return tzdata; // a directory: the compiler handles it
-        }
-        var tarBytes = new MemoryStream();
-        using (var gzip = new System.IO.Compression.GZipStream(new MemoryStream(bytes), System.IO.Compression.CompressionMode.Decompress))
-            await gzip.CopyToAsync(tarBytes);
+            return tzdata; // a directory
+
+        using var tarBytes = new MemoryStream(bytes);
+        var tarStream = Decompress(tarBytes);
         string? version = null;
         tarBytes.Position = 0;
-        using (var tar = new System.Formats.Tar.TarReader(tarBytes, leaveOpen: true))
+        using (var tar = new TarReader(tarStream, leaveOpen: true))
         {
             while (tar.GetNextEntry() is { } entry)
             {
                 if (entry.Name.TrimStart('.', '/') == "version" && entry.DataStream is not null)
                 {
                     using var reader = new StreamReader(entry.DataStream);
-                    version = (await reader.ReadToEndAsync()).Trim();
+                    version = reader.ReadToEnd().Trim();
                     break;
                 }
             }
@@ -129,22 +149,34 @@ internal static class TzdbExport
         output.WriteBinary($"{TzdataFixtureDirectory}/tzdata{version}.tar.gz", bytes);
         output.DeleteStale(TzdataFixtureDirectory, "tzdata*.tar.gz");
         var path = Path.Combine(work, $"tzdata{version}.tar");
-        await File.WriteAllBytesAsync(path, tarBytes.ToArray());
+        File.WriteAllBytes(path, tarBytes.ToArray());
         return path;
     }
 
-    private static async Task<(byte[], string)> DownloadLatest()
+    private static TzdbSource DownloadLatest()
     {
-        using var client = Downloads.CreateClient();
-        var url = (await client.GetStringAsync("https://nodatime.org/tzdb/latest.txt")).Trim();
-        return (await client.GetByteArrayAsync(url), url);
+        var url = System.Text.Encoding.UTF8.GetString(Downloads.GetBytes("https://nodatime.org/tzdb/latest.txt")).Trim();
+        return new TzdbSource(Downloads.GetBytes(url), url);
     }
 
-    private static (byte[], string) Embedded()
+    private static TzdbSource Embedded()
     {
         using var stream = typeof(TzdbDateTimeZoneSource).Assembly.GetManifestResourceStream("NodaTime.TimeZones.Tzdb.nzd")!;
         using var memory = new MemoryStream();
         stream.CopyTo(memory);
-        return (memory.ToArray(), $"Tzdb.nzd embedded in NodaTime {ToolEnvironment.NodaTimeTag}");
+        return new TzdbSource(memory.ToArray(), $"Tzdb.nzd embedded in NodaTime {ToolEnvironment.NodaTimeVersion}");
+    }
+
+    private static Stream Decompress(MemoryStream stream)
+    {
+        if (stream.Length < 2)
+            return stream; // Too short to be compressed.
+        var first = stream.ReadByte();
+        var second = stream.ReadByte();
+        stream.Position = 0;
+        if (first == 0x1F && second == 0x8B)
+            // Stream is a gzip stream
+            return new GZipStream(stream, CompressionMode.Decompress);
+        return stream;
     }
 }

@@ -2,7 +2,16 @@ version: 2
 # One pull request per dependency bump (no groups), so each can be reviewed, tested and merged on its own.
 updates:
   - package-ecosystem: npm
+    directory: /ts
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
     directory: /
+    schedule:
+      interval: weekly
+  # noda_dart and the Flutter test app (pub).
+  - package-ecosystem: pub
+    directories: [/dart/noda_dart, /dart/test_apps/system_source_checks, /dart/test_apps/system_source_flutter]
     schedule:
       interval: weekly
   - package-ecosystem: nuget

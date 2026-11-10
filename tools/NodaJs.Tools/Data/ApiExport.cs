@@ -4,16 +4,12 @@ using NodaJs.Tools.Common;
 
 namespace NodaJs.Tools.Data;
 
-/// <summary>
-/// NodaTime's public API, by reflection: every public type and member, with its kind (property vs
-/// method, static vs instance) and signatures. test/api/api.test.ts checks noda-js against it, so a C#
-/// property must be a TS getter, a method must be a method, and nothing goes missing unnoticed.
-/// </summary>
+/// <summary>NodaTime's public API (kinds and signatures), which each port's API test checks itself against.</summary>
 internal static class ApiExport
 {
     private static readonly string[] ExcludedNamespaces = ["NodaTime.Annotations", "NodaTime.HighPerformance", "NodaTime.Xml"];
 
-    // Types from .NET that noda-js deliberately doesn't interoperate with (docs/api-differences.md).
+    // Not ported (docs/api-differences.md).
     private static readonly HashSet<string> BclInteropTypes =
     [
         "System.DateTime", "System.DateTimeOffset", "System.TimeSpan", "System.DateOnly", "System.TimeOnly",
@@ -28,38 +24,57 @@ internal static class ApiExport
     {
         var types = ReflectionExports.NodaTimeAssembly.GetExportedTypes()
             .Where(t => !ExcludedNamespaces.Contains(t.Namespace))
-            .OrderBy(t => t.FullName, StringComparer.Ordinal);
-        var body = new TypescriptWriter()
-            .WriteLine("import type { ApiType } from \"./types.ts\";", emptyLineAfter: true)
-            .OpenBlock("export const NodaTimeApi: readonly ApiType[] = [");
-        foreach (var type in types)
+            .OrderBy(t => t.FullName, StringComparer.Ordinal)
+            .Select(t => new ApiType(t, t.IsEnum ? [] : Members(t).ToList()))
+            .ToList();
+        foreach (var port in LangTarget.All)
         {
-            body.OpenBlock("{")
-                .Property("name", Ts.Str(ReflectionExports.TsTypeName(type)))
-                .Property("fullName", Ts.Str(type.FullName))
-                .Property("kind", Ts.Str(Kind(type)));
-            if (type.IsEnum)
+            var body = port.NewWriter();
+            switch (body)
             {
-                body.Property("members", "[]")
-                    .CloseBlock("},");
-                continue;
+                case TypescriptWriter:
+                    body.WriteLine("import type { ApiType } from \"./types.ts\";", emptyLineAfter: true)
+                        .OpenBlock("export const NodaTimeApi: readonly ApiType[] = [");
+                    break;
+                case DartWriter:
+                    body.WriteLine("import 'types.dart';", emptyLineAfter: true)
+                        .OpenBlock("const List<ApiType> NodaTimeApi = [");
+                    break;
+                default:
+                    body.ThrowUnknown();
+                    break;
             }
-            body.OpenBlock("members: [");
-            foreach (var member in Members(type))
-                body.WriteLine("{ " +
-                               $"name: {Ts.Str(member.Name)}, " +
-                               $"csName: {Ts.Str(member.CsName)}, " +
-                               $"kind: {Ts.Str(member.Kind)}, " +
-                               $"isStatic: {Ts.Bool(member.IsStatic)}, " +
-                               $"signatures: [{string.Join(", ", member.Signatures.Select(Ts.Str))}]" +
-                               (member.BclInterop ? ", bclInterop: true" : "") +
-                               " },");
-            body.CloseBlock("],")
-                .CloseBlock("},");
+            foreach (var apiType in types)
+            {
+                var type = apiType.Type;
+                body.OpenObjectLine("ApiType")
+                    .Property("name", body.Str(ReflectionExports.FlatTypeName(type)))
+                    .Property("fullName", body.Str(type.FullName))
+                    .Property("kind", body.Str(Kind(type)));
+                if (type.IsEnum)
+                {
+                    body.Property("members", "[]")
+                        .CloseObjectLine();
+                    continue;
+                }
+                body.OpenBlock("members: [");
+                foreach (var member in apiType.Members)
+                    body.WriteLine(body.Object("ApiMember", new
+                    {
+                        name = body.Str(member.Name),
+                        csName = body.Str(member.CsName),
+                        kind = body.Str(member.Kind),
+                        isStatic = body.Bool(member.IsStatic),
+                        signatures = body.List(member.Signatures.Select(body.Str)),
+                        bclInterop = member.BclInterop ? body.Bool(true) : null,
+                    }) + ",");
+                body.CloseBlock("],")
+                    .CloseObjectLine();
+            }
+            body.CloseBlock("];");
+            output.Write(port.Test("api/nodatime-api"), "api", body,
+                ["Source: NodaTime's public API, by reflection."]);
         }
-        body.CloseBlock("];");
-        output.Write("test/api/nodatime-api.generated.ts", "api", body,
-            ["Source: public types and members of the NodaTime assembly, by reflection."]);
     }
 
     private static string Kind(Type type) =>
@@ -70,23 +85,25 @@ internal static class ApiExport
         type.IsAbstract && type.IsSealed ? "static class" :
         "class";
 
+    private sealed record ApiType(Type Type, IReadOnlyList<Member> Members);
+
     private sealed record Member(string Name, string CsName, string Kind, bool IsStatic, List<string> Signatures, bool BclInterop);
+
+    private sealed record MemberKey(string Name, string Kind, bool IsStatic);
 
     private static IEnumerable<Member> Members(Type type)
     {
-        var members = new Dictionary<(string, string, bool), Member>();
+        var members = new Dictionary<MemberKey, Member>();
         void Add(string csName, string kind, bool isStatic, string signature, bool bcl)
         {
-            // noda-js members keep their C# (PascalCase) names.
             var name = kind == "constructor" ? "constructor" : csName;
-            var key = (name, kind, isStatic);
+            var key = new MemberKey(name, kind, isStatic);
             if (!members.TryGetValue(key, out var member))
             {
                 member = new Member(name, csName, kind, isStatic, [], true);
                 members[key] = member;
             }
             member.Signatures.Add(signature);
-            // A member is BCL-interop only if every overload is.
             if (!bcl)
                 members[key] = member with { BclInterop = false };
         }

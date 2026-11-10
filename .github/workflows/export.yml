@@ -1,10 +1,9 @@
-# Re-runs the .NET tools (tools/generate.ps1) and opens a PR when generated files change:
-# new IANA tz data or CLDR mapping, new test scenarios after a NodaTime bump, culture data changes.
+# Weekly: NodaTime main's latest commit, IANA tzdata and CLDR, regenerated into a pull request (whose CI checks it).
 name: export
 
 on:
   schedule:
-    - cron: "17 3 * * 1" # weekly, Monday 03:17 UTC
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
   workflow_dispatch:
 
 permissions:
@@ -14,12 +13,8 @@ permissions:
 jobs:
   export:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: tools/global.json
@@ -27,17 +22,16 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          
-      - run: npm ci
-      - run: npm run generate
-      - run: npm run typecheck
-      - run: npm test
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - run: node "$GITHUB_WORKSPACE/tools/update-nodatime.ts"
+      # Unlocked restore: a new NodaTime commit may change the tools' packages.lock.json.
+      - run: node "$GITHUB_WORKSPACE/tools/generate.ts"
+        env:
+          CI: false
       - uses: peter-evans/create-pull-request@v8
         with:
           branch: automated/export
-          title: "Regenerate data from .NET / NodaTime / IANA / CLDR"
-          commit-message: "Regenerate data from .NET / NodaTime / IANA / CLDR"
-          body: |
-            Automated run of `tools/generate.ps1`. Review the diff of `*.generated.ts` files:
-            tzdb (`src/noda-js/TimeZones/TzdbBundledData.generated.ts`), CLDR Windows mapping, cultures,
-            test scenarios and golden vectors.
+          title: "Regenerate from NodaTime main / IANA / CLDR"
+          commit-message: "Regenerate from NodaTime main / IANA / CLDR"
+          body: Automated `node tools/update-nodatime.ts` and `node tools/generate.ts`.

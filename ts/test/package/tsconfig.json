@@ -1,0 +1,15 @@
+{
+  // Checks the built packages' declarations as an app sees them (npm run check:package).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": false,
+    "noEmit": true,
+    "types": []
+  },
+  "files": ["consumer.ts"]
+}

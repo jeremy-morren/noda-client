@@ -1,13 +1,7 @@
 using System.CommandLine;
 using NodaJs.Package;
 
-// The release scripts' archive handling, the same on every machine (no dependence on its zip or tar):
-// scripts/build-module.ps1 makes the single-file module's archives, reproducibly (see Archive), and
-// scripts/publish-github-packages.ps1 unpacks npm tarballs.
-//
-//   NodaJs.Package zip <output> <files...> --time <time> [--directory <dir>]
-//   NodaJs.Package tar-gzip <output> <files...> --time <time> [--directory <dir>]
-//   NodaJs.Package extract-tar-gzip <archive> --directory <dir>
+// The release scripts' archives, independent of the machine's zip and tar.
 
 var zip = ArchiveCommand("zip", "Writes a zip archive.", Archive.WriteZip);
 var tarGzip = ArchiveCommand("tar-gzip", "Writes a gzip-compressed tar archive.", Archive.WriteTarGzip);
@@ -36,13 +30,12 @@ extractTarGzip.SetAction(result =>
     return 0;
 });
 
-var root = new RootCommand("Release archives: reproducible zip and tar.gz (the same files and time give the same bytes on every OS), and extraction.")
+var root = new RootCommand("Reproducible zip and tar.gz release archives, and extraction.")
 {
     zip, tarGzip, extractTarGzip,
 };
-return await root.Parse(args).InvokeAsync();
+return root.Parse(args).Invoke();
 
-// The command for one archive format: the output, the files, and the time every entry is dated.
 Command ArchiveCommand(string name, string description, Action<Stream, IReadOnlyList<ArchiveFile>, DateTimeOffset> write)
 {
     var outputArgument = new Argument<FileInfo>("output")
@@ -51,12 +44,16 @@ Command ArchiveCommand(string name, string description, Action<Stream, IReadOnly
     };
     var filesArgument = new Argument<string[]>("files")
     {
-        Description = "The files to archive, in order, relative to --directory; each entry is named by this path.",
-        Arity = ArgumentArity.OneOrMore,
+        Description = "The files to archive, in order, relative to --directory.",
+        Arity = ArgumentArity.ZeroOrMore,
+    };
+    var filesFromOption = new Option<FileInfo?>("--files-from")
+    {
+        Description = "A UTF-8 file listing more files to archive, one per line.",
     };
     var timeOption = new Option<DateTimeOffset>("--time")
     {
-        Description = "Every entry's modification time, e.g. HEAD's commit date (ISO 8601).",
+        Description = "Every entry's modification time (ISO 8601).",
         Required = true,
     };
     var directoryOption = new Option<DirectoryInfo?>("--directory")
@@ -64,13 +61,19 @@ Command ArchiveCommand(string name, string description, Action<Stream, IReadOnly
         Description = "The directory the files are in (default: the working directory).",
     };
 
-    var command = new Command(name, description) { outputArgument, filesArgument, timeOption, directoryOption };
+    var command = new Command(name, description) { outputArgument, filesArgument, filesFromOption, timeOption, directoryOption };
     command.SetAction(result =>
     {
         var directory = result.GetValue(directoryOption)?.FullName ?? Environment.CurrentDirectory;
-        var files = result.GetValue(filesArgument)!
+        var filesFrom = result.GetValue(filesFromOption);
+        IEnumerable<string> listed = filesFrom is null
+            ? []
+            : File.ReadAllLines(filesFrom.FullName).Where(line => line.Length > 0);
+        var files = (result.GetValue(filesArgument) ?? []).Concat(listed)
             .Select(file => new ArchiveFile(file.Replace('\\', '/'), Path.Combine(directory, file)))
             .ToList();
+        if (files.Count == 0)
+            throw new ArgumentException("No files to archive: give them as arguments or with --files-from.");
         var output = result.GetValue(outputArgument)!;
         using (var stream = File.Create(output.FullName))
             write(stream, files, result.GetValue(timeOption));

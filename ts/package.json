@@ -1,0 +1,86 @@
+{
+  "name": "noda-js-workspace",
+  "private": true,
+  "description": "Workspace for noda-js and its companion packages (see README.md). Releases take their version from ../version.txt.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "src/noda-js",
+    "src/noda-js-zod"
+  ],
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.5.1",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build/clean.ts ts/src/noda-js/dist ts/src/noda-js-zod/dist && tsc -b src/noda-js src/noda-js-zod",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config src",
+    "typecheck": "tsc -b src/noda-js src/noda-js-zod && tsc -p test/tsconfig.json --noEmit && tsc -p ../tsconfig.json",
+    "test": "vitest run",
+    "test:node": "vitest run --project node --project node-longjs",
+    "test:browser": "vitest run --project chromium --project firefox --project webkit",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --coverage --reporter=default --reporter=./test/vitest/junit-reporter.ts --outputFile.junit=test-results/junit.xml",
+    "generate": "node ../tools/generate.ts",
+    "check:package": "npm run lint && npm run check:package --workspaces && tsc -p test/package/tsconfig.json",
+    "check:reproducible": "node scripts/build/check-reproducible.ts",
+    "build:module": "node scripts/build/build-module.ts",
+    "build:native": "node scripts/native/build-native.ts",
+    "test:native": "node scripts/native/test-native.ts",
+    "test:blob": "node scripts/test/test-blob.ts",
+    "test:merge": "node scripts/test/merge-test-reports.ts",
+    "test:android": "node scripts/test/test-android.ts",
+    "test:export-system-zones": "node scripts/test/export-system-zones.ts",
+    "test:install-hermes": "node scripts/test/install-hermes.ts",
+    "test:install-old-engines": "node scripts/test/install-old-engines.ts",
+    "test:start-ios-simulator": "node ../scripts/devices/start-ios-simulator.ts"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@babel/core": "^8.1.0",
+    "@babel/plugin-transform-block-scoping": "^8.0.10",
+    "@babel/plugin-transform-classes": "^8.1.0",
+    "@rollup/plugin-node-resolve": "16.0.3",
+    "@types/istanbul-lib-coverage": "2.0.6",
+    "@types/istanbul-lib-report": "3.0.3",
+    "@types/istanbul-reports": "3.0.4",
+    "@types/node": "^26.6.6",
+    "@vitest/browser": "5.1.0",
+    "@vitest/browser-playwright": "5.1.0",
+    "@vitest/browser-webdriverio": "5.0.0",
+    "@vitest/coverage-v8": "5.1.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-es-x": "^10.1.0",
+    "istanbul-lib-coverage": "3.2.2",
+    "istanbul-lib-report": "3.0.1",
+    "istanbul-reports": "3.2.0",
+    "linq-to-typescript": "^12.1.1",
+    "node-gyp": "13.1.0",
+    "playwright": "1.64.1",
+    "publint": "^0.3.25",
+    "quickjs-emscripten": "0.32.0",
+    "rollup": "^4.67.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "5.1.0",
+    "webdriverio": "9.32.0",
+    "webpack": "5.112.2",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "minimatch": "^11.0.4"
+  },
+  "optionalDependencies": {
+    "@parcel/config-default": "2.16.4",
+    "@parcel/core": "2.16.4"
+  }
+}

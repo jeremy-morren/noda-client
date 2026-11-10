@@ -8,18 +8,12 @@ using NodaTime.TimeZones;
 namespace NodaJs.Tools.Data;
 
 /// <summary>
-/// Golden JSON (test/golden/json/&lt;calendar&gt;.generated.ts): an object with a property for every type
-/// NodaTime.Serialization.SystemTextJson handles (two for each zoned type: a tzdb zone and a BCL zone), serialized by
-/// it, with each property's value encoded for the tests to compare with.
-/// <para>
-/// There is a file for every calendar system. The ISO file uses the default converters; the others hold the same values
-/// converted to that calendar, serialized with converters whose patterns use it: JSON doesn't record the calendar, so
-/// the reader has to be given it (noda-js: <c>fromJSON(json, calendar)</c>).
-/// </para>
+/// Per calendar, NodaTime.Serialization.SystemTextJson's output for a value of each type it handles, and the values.
+/// Non-ISO files use converters with that calendar: JSON doesn't record it.
 /// </summary>
 internal static class JsonGoldenExports
 {
-    private static readonly TsValueEncoder Encoder = new();
+    private static readonly ValueEncoder Encoder = new();
 
     // NodaConverters.CreateZonedDateTimeConverter's pattern.
     private const string ZonedDateTimePatternText = "uuuu'-'MM'-'dd'T'HH':'mm':'ss;FFFFFFFFFo<G> z";
@@ -36,28 +30,29 @@ internal static class JsonGoldenExports
         var options = new JsonSerializerOptions().ConfigureForNodaTime(Settings(calendar));
         var json = JsonSerializer.Serialize(sample, options);
 
-        var body = new TypescriptWriter()
-            .WriteLine("import type { JsonGolden } from \"../types.ts\";", emptyLineAfter: true)
-            .OpenBlock("export const golden: JsonGolden = {")
-            .Property("calendar", Ts.Str(calendar.Id))
-            .Property("json", Ts.Str(json))
-            .OpenBlock("properties: [");
-        foreach (var property in typeof(Sample).GetProperties())
-            body.WriteLine("{ " +
-                           $"name: {Ts.Str(property.Name)}, " +
-                           $"type: {Ts.Str(property.PropertyType.Name)}, " +
-                           $"value: {Encoder.Encode(property.GetValue(sample))} " +
-                           "},");
-        body.CloseBlock("],")
-            .CloseBlock("};");
-        output.Write($"test/golden/json/{CalendarGoldenExports.FileName(calendar)}.generated.ts", "golden", body,
-            ["NodaTime.Serialization.SystemTextJson's output for one value of each type, and the values it serialized."]);
+        var properties = typeof(Sample).GetProperties()
+            .Select(p => new GoldenProperty(p.Name, p.PropertyType.Name, Encoder.Encode(p.GetValue(sample))))
+            .ToList();
+
+        foreach (var port in LangTarget.All)
+        {
+            var body = port.NewWriter();
+            body.OpenConstObject("golden", "JsonGolden", "../types", properties.All(p => p.Value.IsDartConstant))
+                .Property("calendar", body.Str(calendar.Id))
+                .Property("json", body.Str(json))
+                .OpenBlock("properties: [");
+            foreach (var p in properties)
+                body.WriteLine(body.Object("JsonGoldenProperty", new { name = body.Str(p.Name), type = body.Str(p.Type), value = body.Value(p.Value) }) + ",");
+            body.CloseBlock("],")
+                .CloseConstObject();
+            output.Write(port.Test($"golden/json/{CalendarGoldenExports.FileName(calendar)}"), "golden", body,
+                ["NodaTime.Serialization.SystemTextJson's output for a value of each type, and the values."]);
+        }
     }
 
-    /// <summary>
-    /// The default converters, with a provider that throws (zones are only looked up when deserializing); for a non-ISO
-    /// calendar, converters whose patterns use it for the types that have a calendar.
-    /// </summary>
+    /// <summary>A property of <see cref="Sample"/>: its name, type name and value.</summary>
+    private sealed record GoldenProperty(string Name, string Type, EncodedValue Value);
+
     private static NodaJsonSettings Settings(CalendarSystem calendar)
     {
         var provider = new SerializeOnlyProvider();
@@ -68,8 +63,7 @@ internal static class JsonGoldenExports
         settings.LocalDateTimeConverter = new NodaPatternConverter<LocalDateTime>(LocalDateTimePattern.ExtendedIso.WithCalendar(calendar));
         settings.OffsetDateConverter = new NodaPatternConverter<OffsetDate>(OffsetDatePattern.GeneralIso.WithCalendar(calendar));
         settings.OffsetDateTimeConverter = new NodaPatternConverter<OffsetDateTime>(OffsetDateTimePattern.Rfc3339.WithCalendar(calendar));
-        // YearMonthPattern has no WithCalendar: the calendar comes from the template value (1 January 2000 ISO in the
-        // calendar, which every calendar's range includes).
+        // YearMonthPattern has no WithCalendar: use the template value (2000-01-01 is in every calendar's range).
         settings.YearMonthConverter = new NodaPatternConverter<YearMonth>(
             YearMonthPattern.Iso.WithTemplateValue(new LocalDate(2000, 1, 1).WithCalendar(calendar).ToYearMonth()));
         settings.ZonedDateTimeConverter = new NodaPatternConverter<ZonedDateTime>(
@@ -77,7 +71,6 @@ internal static class JsonGoldenExports
         return settings;
     }
 
-    /// <summary>One value of each type, in the given calendar where the type has one.</summary>
     private sealed record Sample(
         Instant Instant,
         LocalDate LocalDate,
@@ -104,7 +97,6 @@ internal static class JsonGoldenExports
             var date = new LocalDate(2024, 2, 29);
             var time = new LocalTime(13, 45, 30).PlusNanoseconds(987_654_321);
             var tzdbZone = DateTimeZoneProviders.Tzdb["Europe/London"];
-            // A Windows zone ID ("AUS Eastern Standard Time"): noda-js reads it with noda-js/windows.
             var bclZone = BclDateTimeZone.FromTimeZoneInfo(TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time"));
             var period = new PeriodBuilder { Years = 1, Months = 2, Weeks = 3, Days = 4, Hours = 5, Minutes = 6, Seconds = 7, Milliseconds = 8 }.Build();
             return new Sample(
@@ -113,7 +105,6 @@ internal static class JsonGoldenExports
                 LocalTime: time,
                 LocalDateTime: date.At(time).WithCalendar(calendar),
                 AnnualDate: new AnnualDate(2, 29),
-                // The month containing 1 February 2024 (ISO) in the calendar.
                 YearMonth: new LocalDate(2024, 2, 1).WithCalendar(calendar).ToYearMonth(),
                 Offset: Offset.FromHoursAndMinutes(5, 30),
                 OffsetDate: date.WithOffset(Offset.FromHours(-5)).WithCalendar(calendar),
@@ -130,7 +121,7 @@ internal static class JsonGoldenExports
         }
     }
 
-    /// <summary>A provider that throws: serialization never looks zones up, so any call is a bug.</summary>
+    /// <summary>Serialization never looks zones up.</summary>
     private sealed class SerializeOnlyProvider : IDateTimeZoneProvider
     {
         private static InvalidOperationException Unused() =>

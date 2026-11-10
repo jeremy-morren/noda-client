@@ -1,0 +1,21 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    # Ported C# `if`s keep their braces (or lack of them).
+    curly_braces_in_flow_control_structures: ignore
+    # Generated scenario data.
+    unnecessary_const: ignore
+  exclude:
+    - build/**
+
+linter:
+  rules:
+    # NodaTime's names and file paths, unchanged.
+    non_constant_identifier_names: false
+    constant_identifier_names: false
+    file_names: false
+    library_private_types_in_public_api: false

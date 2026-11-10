@@ -1,79 +1,13 @@
 {
-  "name": "noda-js-workspace",
+  "name": "noda-repo",
   "private": true,
-  "description": "Workspace for noda-js and its companion packages (see README.md).",
-  "license": "Apache-2.0",
+  "description": "Repository tooling only (no version: see version.txt): npm ci installs the scripts package, noda-scripts.",
   "type": "module",
-  "version": "3.3",
   "workspaces": [
-    "src/noda-js",
-    "src/noda-js-zod"
+    "scripts"
   ],
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": ">=24",
-      "onFail": "error"
-    },
-    "packageManager": {
-      "name": "npm",
-      "version": ">=11.5.1",
-      "onFail": "error"
-    }
-  },
-  "scripts": {
-    "build": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/clean.ps1 src/noda-js/dist src/noda-js-zod/dist && tsc -b src/noda-js src/noda-js-zod",
-    "lint": "eslint --flag unstable_native_nodejs_ts_config src",
-    "typecheck": "tsc -b src/noda-js src/noda-js-zod && tsc -p test/tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:node": "vitest run --project node",
-    "test:browser": "vitest run --project chromium --project firefox --project webkit",
-    "test:watch": "vitest",
-    "test:ci": "vitest run --coverage --reporter=default --reporter=./test/vitest/junit-reporter.ts --outputFile.junit=test-results/junit.xml",
-    "generate": "pwsh -NoProfile -ExecutionPolicy Bypass -File tools/generate.ps1",
-    "check:package": "npm run lint && npm run check:package --workspaces && tsc -p test/package/tsconfig.json",
-    "check:reproducible": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-reproducible.ps1",
-    "build:module": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-module.ps1",
-    "build:native": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/build-native.ps1",
-    "test:blob": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-blob.ps1",
-    "test:merge": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/merge-test-reports.ps1",
-    "test:android": "bash scripts/test-android.sh",
-    "test:export-system-zones": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/export-system-zones.ps1",
-    "test:install-hermes": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/install-hermes.ps1",
-    "test:start-ios-simulator": "bash scripts/start-ios-simulator.sh"
-  },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.5",
-    "@babel/core": "^8.1.0",
-    "@babel/plugin-transform-block-scoping": "^8.0.10",
-    "@babel/plugin-transform-classes": "^8.1.0",
-    "@types/istanbul-lib-coverage": "2.0.6",
-    "@types/istanbul-lib-report": "3.0.3",
-    "@types/istanbul-reports": "3.0.4",
-    "@types/node": "^26.6.6",
-    "@vitest/browser": "5.1.0",
-    "@vitest/browser-playwright": "5.1.0",
-    "@vitest/browser-webdriverio": "5.0.0",
-    "@vitest/coverage-v8": "5.1.0",
-    "esbuild": "^0.28.2",
-    "eslint": "^10.14.0",
-    "eslint-plugin-es-x": "^10.1.0",
-    "istanbul-lib-coverage": "3.2.2",
-    "istanbul-lib-report": "3.0.1",
-    "istanbul-reports": "3.2.0",
-    "linq-to-typescript": "^12.1.1",
-    "node-gyp": "13.1.0",
-    "playwright": "1.64.1",
-    "publint": "^0.3.25",
-    "quickjs-emscripten": "0.32.0",
-    "rollup": "^4.67.5",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.1",
-    "vitest": "5.1.0",
-    "webdriverio": "9.32.0",
-    "zod": "^4.6.7"
-  },
-  "overrides": {
-    "minimatch": "^11.0.4"
+    "@types/node": "26.6.6",
+    "@types/semver": "7.8.0"
   }
 }

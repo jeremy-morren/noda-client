@@ -1,0 +1,114 @@
+// Ported from NodaTime 6e024dde: src/NodaTime.Test/DateAdjustersTest.cs
+// Copyright 2014 The Noda Time Authors. All rights reserved.
+// Use of this source code is governed by the Apache License 2.0,
+// as found in the LICENSE.txt file.
+
+import {
+  CalendarSystem,
+  DateAdjusters,
+  IsoDayOfWeek,
+  LocalDate,
+  Period,
+} from "../../src/noda-js/internal.ts";
+import { assertNodaEqual, assertThrows } from "../helpers/assertions.ts";
+import { port } from "../helpers/scenarios.ts";
+import { fixture } from "../scenarios/DateAdjustersTest.generated.ts";
+
+port(fixture, {
+  StartOfMonth() {
+    const start = new LocalDate(2014, 6, 27);
+    const end = new LocalDate(2014, 6, 1);
+    assertNodaEqual(DateAdjusters.StartOfMonth(start), end);
+  },
+
+  EndOfMonth() {
+    const start = new LocalDate(2014, 6, 27);
+    const end = new LocalDate(2014, 6, 30);
+    assertNodaEqual(DateAdjusters.EndOfMonth(start), end);
+  },
+
+  DayOfMonth() {
+    const start = new LocalDate(2014, 6, 27);
+    const end = new LocalDate(2014, 6, 19);
+    const adjuster = DateAdjusters.DayOfMonth(19);
+    assertNodaEqual(adjuster(start), end);
+  },
+
+  NextOrSame(year: number, month: number, day: number, dayOfWeek: IsoDayOfWeek,
+    expectedYear: number, expectedMonth: number, expectedDay: number) {
+    const start = new LocalDate(year, month, day);
+    const actual = start.With(DateAdjusters.NextOrSame(dayOfWeek));
+    const expected = new LocalDate(expectedYear, expectedMonth, expectedDay);
+    assertNodaEqual(actual, expected);
+  },
+
+  PreviousOrSame(year: number, month: number, day: number, dayOfWeek: IsoDayOfWeek,
+    expectedYear: number, expectedMonth: number, expectedDay: number) {
+    const start = new LocalDate(year, month, day);
+    const actual = start.With(DateAdjusters.PreviousOrSame(dayOfWeek));
+    const expected = new LocalDate(expectedYear, expectedMonth, expectedDay);
+    assertNodaEqual(actual, expected);
+  },
+
+  Next(year: number, month: number, day: number, dayOfWeek: IsoDayOfWeek,
+    expectedYear: number, expectedMonth: number, expectedDay: number) {
+    const start = new LocalDate(year, month, day);
+    const actual = start.With(DateAdjusters.Next(dayOfWeek));
+    const expected = new LocalDate(expectedYear, expectedMonth, expectedDay);
+    assertNodaEqual(actual, expected);
+  },
+
+  Previous(year: number, month: number, day: number, dayOfWeek: IsoDayOfWeek,
+    expectedYear: number, expectedMonth: number, expectedDay: number) {
+    const start = new LocalDate(year, month, day);
+    const actual = start.With(DateAdjusters.Previous(dayOfWeek));
+    const expected = new LocalDate(expectedYear, expectedMonth, expectedDay);
+    assertNodaEqual(actual, expected);
+  },
+
+  Month_Valid() {
+    const adjuster = DateAdjusters.Month(2);
+    const start = new LocalDate(2017, 8, 21, CalendarSystem.Julian);
+    const actual = start.With(adjuster);
+    const expected = new LocalDate(2017, 2, 21, CalendarSystem.Julian);
+    assertNodaEqual(actual, expected);
+  },
+
+  Month_InvalidAdjustment() {
+    const adjuster = DateAdjusters.Month(2);
+    const start = new LocalDate(2017, 8, 30, CalendarSystem.Julian);
+    assertThrows("ArgumentOutOfRangeException", () => start.With(adjuster));
+  },
+
+  IsoDayOfWeekAdjusters_TooLarge() {
+    const invalid = (IsoDayOfWeek.Sunday + 1) as IsoDayOfWeek;
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.Next(invalid));
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.NextOrSame(invalid));
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.Previous(invalid));
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.PreviousOrSame(invalid));
+  },
+
+  IsoDayOfWeekAdjusters_TooSmall() {
+    const invalid = (IsoDayOfWeek.Monday - 1) as IsoDayOfWeek;
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.Next(invalid));
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.NextOrSame(invalid));
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.Previous(invalid));
+    assertThrows("ArgumentOutOfRangeException", () => DateAdjusters.PreviousOrSame(invalid));
+  },
+
+  AddPeriod_Valid() {
+    const period = Period.Add(Period.FromMonths(1), Period.FromDays(3));
+    const adjuster = DateAdjusters.AddPeriod(period);
+    const start = new LocalDate(2019, 5, 4);
+    assertNodaEqual(start.With(adjuster), new LocalDate(2019, 6, 7));
+  },
+
+  AddPeriod_Null() {
+    assertThrows("ArgumentNullException", () => DateAdjusters.AddPeriod(null!));
+  },
+
+  AddPeriod_IncludingTimeUnits() {
+    // NUnit's Assert.Throws<ArgumentException> requires exactly ArgumentException (as assertThrows does with a code).
+    assertThrows("ArgumentException", () => DateAdjusters.AddPeriod(Period.Add(Period.FromDays(1), Period.FromHours(1))));
+  },
+});

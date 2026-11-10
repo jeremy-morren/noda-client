@@ -1,12 +1,8 @@
 name: draft release
 
-# On every push to main: works out the next version, builds and packs the packages with it, and creates a draft
-# GitHub release with the npm tarballs (including the Windows native addon packages, built on Windows x64 and ARM64
-# runners) and the single-file module (noda-js-module-<version>.zip / .tar.gz) attached. Publishing the draft (by hand) runs release.yml, which publishes to npm.
-#
-# The version: major.minor from the root package.json (maintained by hand, e.g. "0.2"); the patch is one more than the
-# highest published release of that major.minor, or 0. Drafts don't count, so until a draft is published, each push
-# replaces it (same version, new commit): the old draft and any leftover tag for the version are deleted first.
+# On push to main: builds both ports' packages with the next version (version.txt's major.minor, one more than the
+# highest published patch) and attaches them to a draft release, replacing an earlier draft of that version.
+# Publishing the draft runs release.yml (npm) and, through the tag, publish-dart.yml (pub.dev).
 
 on:
   push:
@@ -16,18 +12,14 @@ on:
 permissions:
   contents: write # create and delete releases and tags
 
-# One draft at a time: a newer push supersedes a run in progress.
 concurrency:
   group: draft-release
   cancel-in-progress: true
 
+# No caches in this workflow: it builds release assets (cache poisoning).
 jobs:
-  # The release's version, from the published releases (scripts/next-version.ps1).
   version:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
     env:
       GH_TOKEN: ${{ github.token }}
     outputs:
@@ -35,47 +27,45 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # tags, for the HEAD tag check
-      - name: Next version
-        id: version
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/next-version.ps1
-      - name: HEAD isn't already released as another version
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-head-tag.ps1 -Version '${{ steps.version.outputs.version }}'
+          fetch-depth: 0 # tags
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - id: version
+        run: node "$GITHUB_WORKSPACE/scripts/release/next-version.ts"
+      - run: node "$GITHUB_WORKSPACE/scripts/release/check-head-tag.ts" --version '${{ steps.version.outputs.version }}'
 
-  # The Windows native addon packages (noda-js-win32-x64, noda-js-win32-arm64), each built on its own architecture
-  # (scripts/build-native.ps1; the build is reproducible) and packed with the release's version.
+  # The Windows native addon packages, each built on its own architecture.
   native:
     needs: version
     name: native (${{ matrix.arch }})
     strategy:
       matrix:
         include:
-          - runner: windows-latest
-            arch: x64
-          - runner: windows-11-arm
-            arch: arm64
+          - { runner: windows-latest, arch: x64 }
+          - { runner: windows-11-arm, arch: arm64 }
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
-        shell: pwsh
+        shell: bash
+        working-directory: ts
     steps:
       - uses: actions/checkout@v7
-      # No cache: these tarballs are release assets (cache poisoning).
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm ci
-      - name: Set the package versions
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/set-versions.ps1 -Version '${{ needs.version.outputs.version }}'
+      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
       - run: npm run build:native
-      - name: Pack
-        run: |
-          New-Item -ItemType Directory -Force artifacts | Out-Null
-          npm pack ./src/noda-js-win32-${{ matrix.arch }} --pack-destination artifacts
+      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version '${{ needs.version.outputs.version }}' ts/src/noda-js-win32-${{ matrix.arch }}
+      # Its debug symbols, matching the .node (reproducible too).
+      - run: cp native/windows/build/Release/time-zones.pdb artifacts/time-zones-win32-${{ matrix.arch }}.pdb
       - uses: actions/upload-artifact@v7
         with:
           name: native-${{ matrix.arch }}
-          path: artifacts/noda-js-win32-*.tgz
+          path: |
+            ts/artifacts/noda-js-win32-*.tgz
+            ts/artifacts/time-zones-win32-*.pdb
           if-no-files-found: error
           retention-days: 7
 
@@ -85,46 +75,37 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: ts
     env:
       GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # tags, for the HEAD tag check
-      # No cache: this run builds the tarballs attached to the release, so it mustn't restore anything another run
-      # could have written (cache poisoning).
+          fetch-depth: 0 # tags
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      # The pinned SDK, for tools/NodaJs.Package (npm run build:module's archives).
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: tools/global.json
-      - run: npm ci
+      - uses: dart-lang/setup-dart@v1
+      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
 
-      # Each step's logic is a script in scripts/, so it can be run and checked locally.
-      - name: Set the package versions
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/set-versions.ps1 -Version '${{ needs.version.outputs.version }}'
-
+      # Read before packing, which releases the Unreleased sections in its staged copies.
+      - name: Release notes
+        run: node "$GITHUB_WORKSPACE/scripts/changelog/changelog.ts" notes > "$RUNNER_TEMP/notes.md"
       - run: npm run build
       - run: npm run check:package
-      # The single-file ES module (noda-js.js and its source map), for use without a bundler: artifacts/module, and
-      # the reproducible archives artifacts/noda-js-module-<version>.zip and .tar.gz.
-      - run: npm run build:module
-      - name: Pack
-        run: npm pack --workspaces --pack-destination artifacts
-      # The native addon packages, from the native jobs.
+      - run: npm run build:module -- --version "$VERSION"
+      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version "$VERSION"
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts" --version "$VERSION"
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/validate-package.ts"
       - uses: actions/download-artifact@v8
         with:
           pattern: native-*
-          path: artifacts
+          path: ts/artifacts
           merge-multiple: true
 
-      - name: Replace an earlier draft and leftover tag for this version
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/delete-draft-release.ps1 -Tag 'v${{ needs.version.outputs.version }}'
-
-      - name: Create the draft release
-        run: |
-          tag='v${{ needs.version.outputs.version }}'
-          gh release create "$tag" artifacts/*.tgz artifacts/noda-js-module-*.zip artifacts/noda-js-module-*.tar.gz \
-            --draft --target "$GITHUB_SHA" --title "$tag" --generate-notes
+      - run: node "$GITHUB_WORKSPACE/scripts/release/delete-draft-release.ts" --tag "v$VERSION"
+      - run: node "$GITHUB_WORKSPACE/scripts/release/create-draft-release.ts" --tag "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
