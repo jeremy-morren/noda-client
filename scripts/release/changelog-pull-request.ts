@@ -1,14 +1,13 @@
 // Commits the changelogs as released (changelog.ts release) to the branch changelog-update-<tag> and opens a pull
 // request to main labelled "release changelog" (ci.yml skips it), or comments on the open one.
-// Usage: node scripts/release/changelog-pull-request.ts --tag v3.3.1 [--dry-run]
+// Usage: node scripts/release/changelog-pull-request.ts --tag v3.3.1
 import { git, program } from "noda-scripts/ci";
 import { commentPullRequest, createLabel, createPullRequest, openPullRequest } from "noda-scripts/gh";
 
-const { tag, dryRun } = program
+const { tag } = program
   .description("Opens the pull request with the released changelogs.")
   .requiredOption("--tag <tag>", "the release tag")
-  .option("--dry-run", "only show whether there are changes")
-  .parse().opts<{ tag: string; dryRun?: boolean }>();
+  .parse().opts<{ tag: string }>();
 const branch = `changelog-update-${tag}`;
 const label = "release changelog";
 const title = `Changelog update - ${tag}`;
@@ -16,8 +15,6 @@ const repo = git();
 
 if (!(await repo.diff())) {
   console.log(`The changelogs already have ${tag}.`);
-} else if (dryRun) {
-  console.log(`Would commit the changelogs to ${branch} and open a pull request.`);
 } else {
   await repo.addConfig("user.email", "action@github.com").addConfig("user.name", "GitHub Action");
   await repo.checkout(["-B", branch]);

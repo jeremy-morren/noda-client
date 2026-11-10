@@ -1,9 +1,7 @@
 name: release dart
 
-# Publishes noda_dart to pub.dev when a release's tag is pushed (pub.dev's automated publishing only accepts tag
-# pushes), after checking the rebuilt archive is byte-identical to the release's.
-# One-time pub.dev setup (Admin → Automated publishing): GitHub Actions, jeremy-morren/noda-client, tag pattern
-# v{{version}}, environment pub.dev. The first version is published by hand.
+# Publishes the release's noda_dart archive to pub.dev when its tag is pushed (pub.dev's automated publishing only
+# accepts tag pushes; publishing a release pushes its tag).
 
 on:
   push:
@@ -13,33 +11,17 @@ permissions:
   contents: read
   id-token: write # pub.dev's OIDC token
 
-# No caches: a publishing run (cache poisoning).
 jobs:
   publish:
     runs-on: ubuntu-latest
     environment: pub.dev
     env:
       GH_TOKEN: ${{ github.token }}
-      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 # tags
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: tools/global.json
       - uses: dart-lang/setup-dart@v1
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm ci --prefix "$GITHUB_WORKSPACE"
-
-      - run: node "$GITHUB_WORKSPACE/scripts/release/check-published-release.ts" --tag "$TAG"
-      - id: version
-        run: node "$GITHUB_WORKSPACE/scripts/release/version-from-tag.ts" --tag "$TAG"
-      - run: node "$GITHUB_WORKSPACE/scripts/release/check-head-tag.ts" --version '${{ steps.version.outputs.version }}'
-      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts" --version '${{ steps.version.outputs.version }}'
-      - run: node "$GITHUB_WORKSPACE/scripts/release/compare-release-assets.ts" --tag "$TAG" --built artifacts --pattern "noda_dart-*.tar.gz"
-      # The archive just checked to be the release's.
-      - name: Publish to pub.dev
-        run: node "$GITHUB_WORKSPACE/dart/scripts/package/publish.ts"
+      - run: npm ci
+      - run: node dart/scripts/package/publish.ts --tag "$GITHUB_REF_NAME"

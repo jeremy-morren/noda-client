@@ -1,173 +1,78 @@
 name: release npm
 
-# When a release is published (normally draft-release.yml's draft): rebuilds at the tag, checks every asset is
-# byte-identical to the release's, stages the npm packages (live after a maintainer approves them with 2FA), publishes
-# them to GitHub Packages, and opens a pull request with the released changelogs. noda_dart: release-dart.yml.
-# npm trusted publishing (OIDC, stage-only) is set up per package on npmjs.com: repository jeremy-morren/noda-client,
-# workflow release-npm.yml, environment npm. A new package name's first version is published by hand.
+# When a release is published (or by hand, for a published release's tag): stages its npm tarballs on npm (live once a
+# maintainer approves them), publishes them to GitHub Packages, and opens a pull request with the released changelogs.
+# npm trusted publishing (stage-only) per package: repository jeremy-morren/noda-client, workflow release-npm.yml,
+# environment npm.
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A published release's tag (v3.3.1)
+        required: true
 
 permissions:
   contents: read
-  id-token: write # npm trusted publishing and provenance; attestations
-  attestations: write # the single-file module's build provenance
 
-# No caches in this workflow: it publishes (cache poisoning).
+env:
+  GH_TOKEN: ${{ github.token }}
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.event.release.tag_name }}
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-      - run: npm ci --prefix "$GITHUB_WORKSPACE"
-      - id: version
-        run: node "$GITHUB_WORKSPACE/scripts/release/version-from-tag.ts" --tag "$TAG"
-
-  native:
-    needs: version
-    name: native (${{ matrix.arch }})
-    strategy:
-      matrix:
-        include:
-          - { runner: windows-latest, arch: x64 }
-          - { runner: windows-11-arm, arch: arm64 }
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-        working-directory: ts
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
-      - run: npm run build:native
-      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version '${{ needs.version.outputs.version }}' ts/src/noda-js-win-${{ matrix.arch }}
-      # Its debug symbols, compared with the release's as the packages are.
-      - run: cp native/windows/build/Release/time-zones.pdb artifacts/time-zones-win32-${{ matrix.arch }}.pdb
-      - uses: actions/upload-artifact@v7
-        with:
-          name: native-${{ matrix.arch }}
-          path: |
-            ts/artifacts/noda-js-win-*.tgz
-            ts/artifacts/time-zones-win32-*.pdb
-          if-no-files-found: error
-          retention-days: 7
-
-  publish:
-    needs: [version, native]
+  npm:
     runs-on: ubuntu-latest
     environment: npm
-    defaults:
-      run:
-        shell: bash
-        working-directory: ts
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ github.event.release.tag_name }}
-      VERSION: ${{ needs.version.outputs.version }}
+    permissions:
+      contents: read
+      id-token: write # trusted publishing and provenance
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 # tags
       # No registry-url: it would set NODE_AUTH_TOKEN, which overrides OIDC.
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: tools/global.json
-      - uses: dart-lang/setup-dart@v1
       # Staged publishing needs npm 11.15.0 or later.
       - run: npm install -g npm@latest
-      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
-      - run: npm audit signatures
-      - run: node "$GITHUB_WORKSPACE/scripts/release/check-head-tag.ts" --version "$VERSION"
-
-      - run: npm run typecheck
-      - run: npx playwright install --with-deps chromium firefox webkit
-      - run: npm run test:install-hermes
-      - run: npm test
-      - run: npm run build
-      - run: npm run check:package
-      - run: npm run check:reproducible
-
-      - run: npm run build:module -- --version "$VERSION"
-      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version "$VERSION"
-      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts" --version "$VERSION"
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: native-*
-          path: ts/artifacts
-          merge-multiple: true
-      - run: node "$GITHUB_WORKSPACE/scripts/release/compare-release-assets.ts" --tag "$TAG" --built ts/artifacts artifacts
-      # Verify with: gh attestation verify noda-js-module-<version>.zip --repo jeremy-morren/noda-client
-      - uses: actions/attest-build-provenance@v4
-        with:
-          subject-path: |
-            ts/artifacts/noda-js-module-*.zip
-            ts/artifacts/noda-js-module-*.tar.gz
-            ts/artifacts/module/noda-js.js
-            ts/artifacts/module/noda-js.js.map
-      # Each package's publishConfig sets access=public and provenance=true.
-      - name: Stage the packages on npm
-        run: node "$GITHUB_WORKSPACE/ts/scripts/release/stage-npm.ts"
+      - run: npm ci
+      - run: node ts/scripts/release/stage-npm.ts --tag "$TAG"
 
   # The same tarballs on GitHub Packages, renamed @<owner>/<name>. Separate, so it can be re-run alone.
   github-packages:
-    needs: publish
+    needs: npm
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    defaults:
-      run:
-        shell: bash
-        working-directory: ts
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: tools/global.json
       - uses: actions/setup-node@v7
         with:
           node-version: 26
           registry-url: https://npm.pkg.github.com
-      - run: npm ci --prefix "$GITHUB_WORKSPACE"
-      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/publish-github-packages.ts" --tag "$TAG" --owner "$GITHUB_REPOSITORY_OWNER"
+      - run: npm ci
+      - run: node ts/scripts/release/publish-github-packages.ts --tag "$TAG" --owner "$GITHUB_REPOSITORY_OWNER"
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
 
   # The changelogs as released, as a pull request to main (branch changelog-update-<tag>, which ci.yml skips).
   changelog:
-    needs: [version, publish]
+    needs: npm
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.TAG }}
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm ci --prefix "$GITHUB_WORKSPACE"
-      - run: node "$GITHUB_WORKSPACE/scripts/changelog/changelog.ts" release '${{ needs.version.outputs.version }}'
-      - run: node "$GITHUB_WORKSPACE/scripts/release/changelog-pull-request.ts" --tag "$TAG"
+      - run: npm ci
+      - id: version
+        run: node scripts/release/version-from-tag.ts --tag "$TAG"
+      - run: node scripts/changelog/changelog.ts release '${{ steps.version.outputs.version }}'
+      - run: node scripts/release/changelog-pull-request.ts --tag "$TAG"
