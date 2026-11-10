@@ -108,7 +108,6 @@ jobs:
       - run: npm run build:module -- --version "$VERSION"
       - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version "$VERSION"
       - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts" --version "$VERSION"
-      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/publish.ts" --dry-run
       - uses: actions/download-artifact@v8
         with:
           pattern: native-*

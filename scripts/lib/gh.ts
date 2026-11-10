@@ -32,11 +32,6 @@ export function downloadReleaseAssets(tag: string, pattern: string, dir: string)
   gh("release", "download", tag, "--pattern", pattern, "--dir", dir);
 }
 
-/** Whether a tag's release is a draft (throws if there's no release). */
-export function isDraft(tag: string): boolean {
-  return (JSON.parse(gh("release", "view", tag, "--json", "isDraft")) as { isDraft: boolean }).isDraft;
-}
-
 /** Creates a draft release of target with files attached, its notes from notesFile followed by GitHub's generated ones. */
 export function createDraftRelease(tag: string, target: string, notesFile: string, files: readonly string[]): void {
   gh("release", "create", tag, ...files, "--draft", "--target", target, "--title", tag, "--notes-file", notesFile, "--generate-notes");
