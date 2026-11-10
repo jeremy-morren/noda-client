@@ -8,6 +8,7 @@ name: draft release
 on:
   push:
     branches: [main]
+    paths-ignore: ['**/CHANGELOG.md'] # changelog-only pushes, however merged (release-npm.yml's changelog pull requests)
   workflow_dispatch:
 
 permissions:

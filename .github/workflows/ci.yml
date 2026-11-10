@@ -3,6 +3,7 @@ name: ci
 # Pull requests; on main, draft-release.yml runs it (workflow_call) before drafting the release.
 on:
   pull_request:
+    paths-ignore: ['**/CHANGELOG.md'] # changelog-only, e.g. release-npm.yml's changelog pull requests
   workflow_call:
 
 concurrency:
@@ -12,10 +13,9 @@ concurrency:
 permissions:
   contents: read
 
-# Everything a job downloads is cached. Every job skips release-npm.yml's changelog pull requests (changelog-update-*).
+# Everything a job downloads is cached.
 jobs:
   checks:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,7 +44,6 @@ jobs:
       - run: npm run build:module
 
   test:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: test (${{ matrix.os }}, ${{ matrix.project }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout || 60 }}
@@ -161,7 +160,6 @@ jobs:
 
   # Chrome on an Android emulator, through Appium.
   android:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -233,7 +231,6 @@ jobs:
           overwrite: true
 
   dart-checks:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -266,7 +263,6 @@ jobs:
 
   # Full suite with coverage, then the system tests in each of dart/scripts/test/time-zones.json's zones.
   dart-vm:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: dart vm (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -323,7 +319,6 @@ jobs:
 
   # Coverage only from Chrome with dart2js (the only web leg package:test reports it for).
   dart-web:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: dart web (${{ matrix.platform }}, ${{ matrix.compiler }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -391,7 +386,6 @@ jobs:
   # The system time zone checks in a Flutter desktop app: the zone set on the machine, and the zone TZ names
   # (dart/scripts/flutter/desktop.ts decides the rest).
   flutter-desktop:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: flutter (${{ matrix.device }}, ${{ matrix.source }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -447,7 +441,6 @@ jobs:
 
   # Release mode: it's the code that ships. Safari ignores TZ.
   flutter-web:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: flutter web (${{ matrix.browser }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -484,7 +477,6 @@ jobs:
 
   # tzdata in the time zone APEX (API 35), and in /system/usr/share/zoneinfo before it (API 28).
   flutter-android:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: flutter (Android API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -575,7 +567,6 @@ jobs:
 
   # flutter/flutter#181771: flutter test can miss the VM service and hang; the script retries.
   flutter-ios:
-    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: flutter (iOS Simulator)
     runs-on: macos-latest
     timeout-minutes: 60
@@ -616,7 +607,7 @@ jobs:
   # Both ports' results as one check and PR comment, with coverage. Fails if any test failed.
   report:
     needs: [test, android, dart-vm, dart-web, flutter-desktop, flutter-web, flutter-android, flutter-ios]
-    if: ${{ !cancelled() && !contains(github.head_ref, 'changelog-update') }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

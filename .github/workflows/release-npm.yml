@@ -57,7 +57,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
 
-  # The changelogs as released, as a pull request to main (branch changelog-update-<tag>, which ci.yml skips).
+  # The changelogs as released, as a pull request to main (branch changelog-update-<tag>; changelog-only, so no CI).
   changelog:
     needs: npm
     runs-on: ubuntu-latest
