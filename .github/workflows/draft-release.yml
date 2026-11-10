@@ -2,7 +2,7 @@ name: draft release
 
 # On push to main: builds both ports' packages with the next version (version.txt's major.minor, one more than the
 # highest published patch) and attaches them to a draft release, replacing an earlier draft of that version.
-# Publishing the draft runs release.yml (npm) and, through the tag, publish-dart.yml (pub.dev).
+# Publishing the draft runs release-npm.yml (npm) and, through the tag, release-dart.yml (pub.dev).
 
 on:
   push:

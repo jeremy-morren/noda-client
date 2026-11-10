@@ -1,4 +1,4 @@
-name: publish dart
+name: release dart
 
 # Publishes noda_dart to pub.dev when a release's tag is pushed (pub.dev's automated publishing only accepts tag
 # pushes), after checking the rebuilt archive is byte-identical to the release's.

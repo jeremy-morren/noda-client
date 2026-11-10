@@ -1,10 +1,10 @@
-name: release
+name: release npm
 
 # When a release is published (normally draft-release.yml's draft): rebuilds at the tag, checks every asset is
 # byte-identical to the release's, stages the npm packages (live after a maintainer approves them with 2FA), publishes
-# them to GitHub Packages, and opens a pull request with the released changelogs. noda_dart: publish-dart.yml.
+# them to GitHub Packages, and opens a pull request with the released changelogs. noda_dart: release-dart.yml.
 # npm trusted publishing (OIDC, stage-only) is set up per package on npmjs.com: repository jeremy-morren/noda-client,
-# workflow release.yml, environment npm. A new package name's first version is published by hand.
+# workflow release-npm.yml, environment npm. A new package name's first version is published by hand.
 
 on:
   release:
