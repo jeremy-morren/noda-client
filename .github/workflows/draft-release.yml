@@ -1,7 +1,8 @@
 name: draft release
 
-# On push to main: builds both ports' packages with the next version (version.txt's major.minor, one more than the
-# highest published patch) and attaches them to a draft release, replacing an earlier draft of that version.
+# On push to main: the full test matrix (ci.yml), and, if it passes, both ports' packages with the next version
+# (version.txt's major.minor, one more than the highest published patch) attached to a draft release, replacing an
+# earlier draft of that version.
 # Publishing the draft runs release-npm.yml (npm) and, through the tag, release-dart.yml (pub.dev).
 
 on:
@@ -16,8 +17,15 @@ concurrency:
   group: draft-release
   cancel-in-progress: true
 
-# No caches in this workflow: it builds release assets (cache poisoning).
+# No caches in the release jobs: they build release assets (cache poisoning). ci.yml's tests use theirs.
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      checks: write # test results
+      pull-requests: write # coverage comments (pull requests only)
+
   version:
     runs-on: ubuntu-latest
     env:
@@ -70,7 +78,7 @@ jobs:
           retention-days: 7
 
   draft:
-    needs: [version, native]
+    needs: [version, native, ci]
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -12,7 +12,7 @@ Both follow NodaTime's main branch, and both are generated, as far as possible, 
 tools in [`tools/`](tools/README.md): enums, constants, culture data, calendar tables, the tz database, and every
 test case of NodaTime's test suite. See [AGENTS.md](AGENTS.md) for how the repository works.
 
-[![CI](https://github.com/jeremy-morren/noda-client/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jeremy-morren/noda-client/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI](https://github.com/jeremy-morren/noda-client/actions/workflows/draft-release.yml/badge.svg?branch=main)](https://github.com/jeremy-morren/noda-client/actions/workflows/draft-release.yml?query=branch%3Amain)
 [![Release](https://img.shields.io/github/v/release/jeremy-morren/noda-client)](https://github.com/jeremy-morren/noda-client/releases/latest)
 
 Licensed under Apache-2.0, like NodaTime. See [NOTICE.txt](NOTICE.txt) for data licences.

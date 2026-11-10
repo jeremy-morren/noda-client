@@ -1,6 +1,6 @@
 # noda-js
 
-[![CI](https://github.com/jeremy-morren/noda-client/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jeremy-morren/noda-client/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI](https://github.com/jeremy-morren/noda-client/actions/workflows/draft-release.yml/badge.svg?branch=main)](https://github.com/jeremy-morren/noda-client/actions/workflows/draft-release.yml?query=branch%3Amain)
 [![Release](https://img.shields.io/github/v/release/jeremy-morren/noda-client)](https://github.com/jeremy-morren/noda-client/releases/latest)
 [![noda-js on npm](https://img.shields.io/npm/v/noda-js?label=noda-js)](https://www.npmjs.com/package/noda-js)
 [![noda-js-zod on npm](https://img.shields.io/npm/v/noda-js-zod?label=noda-js-zod)](https://www.npmjs.com/package/noda-js-zod)

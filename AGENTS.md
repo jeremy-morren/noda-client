@@ -63,10 +63,12 @@ cd dart/noda_dart && dart pub get && dart analyze && dart test  # Dart (-p chrom
 
 ## CI and releases
 
-- `ci.yml`: both ports' tests on every platform feasible; results labelled by platform and architecture.
-- `draft-release.yml` (push to main): version `version.txt` major.minor + next patch after the published releases;
-  builds every package into a draft release. Publishing it runs `release-npm.yml` (npm, GitHub Packages) and
-  `release-dart.yml` (pub.dev), which check the rebuilt assets are byte-identical.
+- `ci.yml` (pull requests): both ports' tests on every platform feasible; results labelled by platform and
+  architecture.
+- `draft-release.yml` (push to main, the only workflow there): runs `ci.yml`; if it passes, versions
+  `version.txt` major.minor + next patch after the published releases and builds every package into a draft
+  release. Publishing it runs `release-npm.yml` (npm, GitHub Packages) and `release-dart.yml` (pub.dev), which check
+  the rebuilt assets are byte-identical.
 - Changelogs (Keep a Changelog): add user-visible changes under `## [Unreleased]` in `ts/src/noda-js/CHANGELOG.md`
   and `dart/noda_dart/CHANGELOG.md`; releasing turns them into the version's section and opens a PR to main.
 

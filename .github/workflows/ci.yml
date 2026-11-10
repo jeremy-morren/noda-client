@@ -1,12 +1,12 @@
 name: ci
 
+# Pull requests; on main, draft-release.yml runs it (workflow_call) before drafting the release.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
