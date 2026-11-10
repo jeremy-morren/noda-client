@@ -1,5 +1,5 @@
-// Publishes a release's npm tarballs to GitHub Packages as @<owner>/<name> (its npm registry only takes the owner's
-// scope); npm authenticates with setup-node's .npmrc.
+// Publishes a release's npm tarballs to GitHub Packages as @<owner>/<name> (its npm registry only takes the owner's scope).
+// npm authenticates with setup-node's .npmrc.
 // Usage: node ts/scripts/release/publish-github-packages.ts --tag v3.3.1 --owner jeremy-morren [--dry-run]
 import { rmSync } from "node:fs";
 import path from "node:path";
