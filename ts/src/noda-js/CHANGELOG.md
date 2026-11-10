@@ -4,7 +4,9 @@ are documented in this file. The format is based on [Keep a Changelog](https://k
 [keep-a-changelog](https://github.com/oscarotero/keep-a-changelog) (`node scripts/changelog/changelog.ts`): add changes
 under Unreleased as they're merged; releasing turns it into the version's section.
 
-## Unreleased
+## [Unreleased]
+
+## [3.3.1] - 2026-11-10
 ### Added
 - System time zones (`noda-js/system`) and the Windows native addon packages.
 - Exact values beyond 2⁵³ use native `BigInt` wherever the engine has it, and long.js only where it doesn't (picked
@@ -21,3 +23,6 @@ under Unreleased as they're merged; releasing turns it into the version's sectio
   ("Cannot access ... before initialization").
 - On engines with WebAssembly, long.js gave `a / -1 = a` for exact values within 2³² of `long.MinValue`, so checked
   multiplication or division of such a value by -1 could throw an `OverflowException` or give the wrong value.
+
+[Unreleased]: https://github.com/jeremy-morren/noda-client/compare/v3.3.1...HEAD
+[3.3.1]: https://github.com/jeremy-morren/noda-client/releases/tag/v3.3.1
