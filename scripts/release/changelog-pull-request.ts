@@ -1,5 +1,5 @@
 // Commits the changelogs as released (changelog.ts release) to the branch changelog-update-<tag> and opens a pull
-// request to main labelled "release changelog" (ci.yml skips it), or comments on the open one.
+// request to main labelled "release changelog" (changelog-only, so no CI), or comments on the open one.
 // Usage: node scripts/release/changelog-pull-request.ts --tag v3.3.1
 import { git, program } from "noda-scripts/ci";
 import { commentPullRequest, createLabel, createPullRequest, openPullRequest } from "noda-scripts/gh";
