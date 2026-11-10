@@ -16,7 +16,7 @@ void main() {
   final local = now.InZone(zone);
   print(local);                                   // 2026-11-08T20:15:42 Australia/Sydney (+11)
   print(local.Date.PlusMonths(1));                // 2026-12-08
-  print(Period.Between(LocalDate(2026, 1, 31), local.Date));
+  print(Period.BetweenLocalDate(LocalDate(2026, 1, 31), local.Date));
 }
 ```
 
