@@ -1,4 +1,4 @@
-name: publish dart
+name: release dart
 
 # Publishes noda_dart to pub.dev when a release's tag is pushed (pub.dev's automated publishing only accepts tag
 # pushes), after checking the rebuilt archive is byte-identical to the release's.
@@ -42,4 +42,4 @@ jobs:
       - run: node "$GITHUB_WORKSPACE/scripts/release/compare-release-assets.ts" --tag "$TAG" --built artifacts --pattern "noda_dart-*.tar.gz"
       # The archive just checked to be the release's.
       - name: Publish to pub.dev
-        run: node "$GITHUB_WORKSPACE/dart/scripts/package/validate-package.ts" --publish
+        run: node "$GITHUB_WORKSPACE/dart/scripts/package/publish.ts"

@@ -12,7 +12,7 @@ concurrency:
 permissions:
   contents: read
 
-# Everything a job downloads is cached. Every job skips release.yml's changelog pull requests (changelog-update-*).
+# Everything a job downloads is cached. Every job skips release-npm.yml's changelog pull requests (changelog-update-*).
 jobs:
   checks:
     if: ${{ !contains(github.head_ref, 'changelog-update') }}
@@ -262,7 +262,7 @@ jobs:
       - name: Licence copies match the repository's
         run: cmp "$GITHUB_WORKSPACE/LICENSE.txt" LICENSE && cmp "$GITHUB_WORKSPACE/NOTICE.txt" NOTICE.txt
       - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts"
-      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/validate-package.ts"
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/publish.ts" --dry-run
       - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pana.ts"
 
   # Full suite with coverage, then the system tests in each of dart/scripts/test/time-zones.json's zones.

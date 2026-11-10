@@ -16,7 +16,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jeremy-morren/noda-client.git",
-    "directory": "src/noda-js-zod"
+    "directory": "ts/src/noda-js-zod"
   },
   "license": "Apache-2.0",
   "author": "Jeremy Morren",
