@@ -2,7 +2,7 @@ name: draft release
 
 # On push to main: builds both ports' packages with the next version (version.txt's major.minor, one more than the
 # highest published patch) and attaches them to a draft release, replacing an earlier draft of that version.
-# Publishing the draft runs release.yml (npm) and, through the tag, publish-dart.yml (pub.dev).
+# Publishing the draft runs release-npm.yml (npm) and, through the tag, release-dart.yml (pub.dev).
 
 on:
   push:
@@ -57,14 +57,14 @@ jobs:
           node-version: 26
       - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
       - run: npm run build:native
-      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version '${{ needs.version.outputs.version }}' ts/src/noda-js-win32-${{ matrix.arch }}
+      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version '${{ needs.version.outputs.version }}' ts/src/noda-js-win-${{ matrix.arch }}
       # Its debug symbols, matching the .node (reproducible too).
       - run: cp native/windows/build/Release/time-zones.pdb artifacts/time-zones-win32-${{ matrix.arch }}.pdb
       - uses: actions/upload-artifact@v7
         with:
           name: native-${{ matrix.arch }}
           path: |
-            ts/artifacts/noda-js-win32-*.tgz
+            ts/artifacts/noda-js-win-*.tgz
             ts/artifacts/time-zones-win32-*.pdb
           if-no-files-found: error
           retention-days: 7
@@ -100,7 +100,7 @@ jobs:
       - run: npm run build:module -- --version "$VERSION"
       - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version "$VERSION"
       - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts" --version "$VERSION"
-      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/validate-package.ts"
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/publish.ts" --dry-run
       - uses: actions/download-artifact@v8
         with:
           pattern: native-*

@@ -1,10 +1,10 @@
-name: release
+name: release npm
 
 # When a release is published (normally draft-release.yml's draft): rebuilds at the tag, checks every asset is
 # byte-identical to the release's, stages the npm packages (live after a maintainer approves them with 2FA), publishes
-# them to GitHub Packages, and opens a pull request with the released changelogs. noda_dart: publish-dart.yml.
+# them to GitHub Packages, and opens a pull request with the released changelogs. noda_dart: release-dart.yml.
 # npm trusted publishing (OIDC, stage-only) is set up per package on npmjs.com: repository jeremy-morren/noda-client,
-# workflow release.yml, environment npm. A new package name's first version is published by hand.
+# workflow release-npm.yml, environment npm. A new package name's first version is published by hand.
 
 on:
   release:
@@ -52,14 +52,14 @@ jobs:
           node-version: 26
       - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
       - run: npm run build:native
-      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version '${{ needs.version.outputs.version }}' ts/src/noda-js-win32-${{ matrix.arch }}
+      - run: node "$GITHUB_WORKSPACE/ts/scripts/release/pack.ts" --version '${{ needs.version.outputs.version }}' ts/src/noda-js-win-${{ matrix.arch }}
       # Its debug symbols, compared with the release's as the packages are.
       - run: cp native/windows/build/Release/time-zones.pdb artifacts/time-zones-win32-${{ matrix.arch }}.pdb
       - uses: actions/upload-artifact@v7
         with:
           name: native-${{ matrix.arch }}
           path: |
-            ts/artifacts/noda-js-win32-*.tgz
+            ts/artifacts/noda-js-win-*.tgz
             ts/artifacts/time-zones-win32-*.pdb
           if-no-files-found: error
           retention-days: 7

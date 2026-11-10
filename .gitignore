@@ -446,7 +446,7 @@ ts/src/*/NOTICE.txt
 .idea/
 # noda-js: the Windows native addon (ts/native/windows, ts/scripts/native/build-native.ts).
 ts/native/windows/build/
-ts/src/noda-js-win32-*/time-zones.node
+ts/src/noda-js-win-*/time-zones.node
 # The Flutter test app's debug build files (the Visual Studio rules above ignore every Debug/ folder): its debug
 # AndroidManifest.xml grants the INTERNET permission flutter test needs to reach the app's VM service.
 !dart/test_apps/system_source_flutter/android/app/src/debug/

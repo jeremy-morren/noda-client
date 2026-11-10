@@ -1,4 +1,4 @@
-// noda-js: new code. The native addon behind the optional packages noda-js-win32-x64 and noda-js-win32-arm64: the
+// noda-js: new code. The native addon behind the optional packages noda-js-win-x64 and noda-js-win-arm64: the
 // Windows calls noda-js/system makes to read the time zone data .NET's TimeZoneInfo reads, as a Node-API module. It
 // implements IWindowsTimeZoneApi (src/noda-js/System/Windows/IWindowsTimeZoneApi.ts), whose documentation defines
 // each operation; the node:ffi implementation (FfiWindowsTimeZoneApi.ts) makes the same calls.

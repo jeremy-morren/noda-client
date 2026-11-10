@@ -113,8 +113,8 @@ Windows), mapping each to its CLDR primary tzdb zone with tzdb's rules. `GetCldr
 
 | Package | Platform |
 |---|---|
-| `noda-js-win32-x64` | 64-bit Windows |
-| `noda-js-win32-arm64` | Windows on ARM64 |
+| `noda-js-win-x64` | 64-bit Windows |
+| `noda-js-win-arm64` | Windows on ARM64 |
 
 - `noda-js` lists both as `optionalDependencies`; npm installs the matching one, nothing elsewhere. No 32-bit package.
 - Same calls and results as FFI (checked by `scripts/native/compare-native.ts` and `test/system/environment.test.ts`), but no

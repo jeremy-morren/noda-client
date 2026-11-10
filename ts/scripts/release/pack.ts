@@ -27,7 +27,7 @@ try {
     }
     if (manifest.name === "noda-js") {
       // Only in releases: in the repository npm would look for them on the registry.
-      manifest.optionalDependencies = { "noda-js-win32-x64": version, "noda-js-win32-arm64": version };
+      manifest.optionalDependencies = { "noda-js-win-x64": version, "noda-js-win-arm64": version };
       releaseChangelog(stageRoot, version, "noda-js");
     }
     writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");

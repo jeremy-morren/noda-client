@@ -105,7 +105,7 @@ beforeAll(async () => {
   writeFileSync(probe, result.outputFiles[0]!.text);
 
   // With the addon package installed next to the probe, as npm installs the optional dependency.
-  const addonPackage = `noda-js-win32-${process!.arch}`;
+  const addonPackage = `noda-js-win-${process!.arch}`;
   const addonSource = join(root, "src", addonPackage);
   addonBuilt = isWindows && existsSync(join(addonSource, "time-zones.node"));
   const probeWithAddon = join(mkdtempSync(join(tmpdir(), "noda-js-system-addon-")), "probe.mjs");
@@ -226,7 +226,7 @@ describe.runIf(isWindows)("on Windows, each backend by what the process has (the
   // CI builds the addon first, so a missing build is an error there.
   const requireAddon = (): boolean => {
     if (!addonBuilt && process!.env["CI"]) {
-      throw new Error(`The native addon isn't built: run npm run build:native (src/noda-js-win32-${process!.arch})`);
+      throw new Error(`The native addon isn't built: run npm run build:native (src/noda-js-win-${process!.arch})`);
     }
     return addonBuilt;
   };
@@ -238,7 +238,7 @@ describe.runIf(isWindows)("on Windows, each backend by what the process has (the
     }
     const probe = run(undefined, [], true);
     expect(probe.backend).toBe("addon");
-    expect(probe.versionId).toMatch(/noda-js-win32-/);
+    expect(probe.versionId).toMatch(/noda-js-win-/);
     ExpectAgreement(probe);
   });
 

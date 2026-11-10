@@ -15,10 +15,10 @@ export interface WindowsTimeZoneApiBackend {
   readonly Api: IWindowsTimeZoneApi;
 }
 
-/** The native addon's package name for this architecture, e.g. "noda-js-win32-x64". @internal */
+/** The native addon's package name for this architecture, e.g. "noda-js-win-x64". @internal */
 export function GetAddonPackageName(): string | null {
   const arch = GetProcessArchitecture();
-  return arch === "x64" || arch === "arm64" ? `noda-js-win32-${arch}` : null;
+  return arch === "x64" || arch === "arm64" ? `noda-js-win-${arch}` : null;
 }
 
 /** The native addon's API, if its package is installed and loads. */

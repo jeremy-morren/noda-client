@@ -1,5 +1,5 @@
 {
-  "name": "noda-js-win32-arm64",
+  "name": "noda-js-win-arm64",
   "version": "0.0.0-development",
   "description": "Optional native addon for noda-js/system on Windows on ARM64: reads Windows' time zone data as .NET's TimeZoneInfo does, without Node's experimental FFI. Installed automatically with noda-js; not used directly.",
   "keywords": [
@@ -15,7 +15,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jeremy-morren/noda-client.git",
-    "directory": "src/noda-js-win32-arm64"
+    "directory": "ts/src/noda-js-win-arm64"
   },
   "license": "Apache-2.0",
   "author": "Jeremy Morren",
