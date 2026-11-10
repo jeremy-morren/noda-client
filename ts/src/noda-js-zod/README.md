@@ -51,8 +51,8 @@ ZonedDateTimeSchema.encode(meeting);   // "2024-01-31T12:00:00+01 Europe/Madrid"
 NodaZ.DateTimeZone(tzdb).parse("America/New_York"); // tzdb.Get("America/New_York")
 ```
 
-For Windows IDs (written by .NET's `BclDateTimeZone`), wrap the provider in `WindowsIdDateTimeZoneProvider`
-(`noda-js/windows`).
+Windows IDs (written by .NET's `BclDateTimeZone`) need `SystemDateTimeZoneProvider` (`noda-js/system`) on Windows.
+Elsewhere, map them to tzdb IDs with `tzdbSource.WindowsMapping.PrimaryMapping` (`noda-js/tzdb/bundled`).
 
 ### Calendars
 

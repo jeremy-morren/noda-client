@@ -36,9 +36,6 @@
       "noda-js/cultures/all": [
         "../src/noda-js/Cultures/all.generated.ts"
       ],
-      "noda-js/windows": [
-        "../src/noda-js/entries/windows.ts"
-      ],
       "noda-js/linq": [
         "../src/noda-js/entries/linq.ts"
       ]

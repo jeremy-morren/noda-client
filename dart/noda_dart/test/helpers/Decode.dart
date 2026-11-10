@@ -1,6 +1,5 @@
 // noda_dart: new code. Decodes the scenarios' encoded values (port of noda-js's ts/test/helpers/decode.ts).
 
-import 'package:noda_dart/src/Bcl/CldrWindowsZones.dart';
 import 'package:noda_dart/src/CalendarSystem.dart';
 import 'package:noda_dart/src/Calendars/Era.dart';
 import 'package:noda_dart/src/Calendars/IslamicEpoch.generated.dart';
@@ -33,6 +32,7 @@ import 'package:noda_dart/src/Text/ZonedDateTimePattern.dart';
 import 'package:noda_dart/src/TimeZones/Delegates.dart';
 import 'package:noda_dart/src/TimeZones/PrecalculatedDateTimeZone.dart';
 import 'package:noda_dart/src/TimeZones/Resolvers.dart';
+import 'package:noda_dart/src/TimeZones/TzdbDateTimeZoneSource.dart';
 import 'package:noda_dart/src/TimeZones/ZoneInterval.dart';
 import 'package:noda_dart/src/YearMonth.dart';
 import 'package:noda_dart/src/ZonedDateTime.dart';
@@ -59,10 +59,36 @@ final Map<String, DateTimeZone> _customZoneCache = {};
 
 IDateTimeZoneProvider get tzdbProvider => DateTimeZoneProviders.Tzdb;
 
-WindowsIdDateTimeZoneProvider? _windowsIdProvider;
+/// For `provider: bcl` zones: tzdb that also looks zones up by the Windows IDs .NET's BclDateTimeZone writes.
+IDateTimeZoneProvider windowsProvider() =>
+    _windowsIdProvider ??= _WindowsIdProvider(tzdbProvider, TzdbDateTimeZoneSource.Default.WindowsMapping.PrimaryMapping);
+IDateTimeZoneProvider? _windowsIdProvider;
 
-/// For `provider: bcl` zones: Windows IDs mapped to tzdb by CLDR.
-WindowsIdDateTimeZoneProvider windowsProvider() => _windowsIdProvider ??= WindowsIdDateTimeZoneProvider(tzdbProvider);
+final class _WindowsIdProvider implements IDateTimeZoneProvider {
+  final IDateTimeZoneProvider _tzdb;
+  final Map<String, String> _mapping;
+  @override
+  final List<String> Ids;
+
+  // Zone ID patterns parse IDs from Ids. compareTo is ordinal.
+  _WindowsIdProvider(this._tzdb, this._mapping)
+      : Ids = List.unmodifiable({..._tzdb.Ids, ..._mapping.keys}.toList()..sort((a, b) => a.compareTo(b)));
+
+  @override
+  String get VersionId => _tzdb.VersionId;
+
+  @override
+  DateTimeZone GetSystemDefault() => _tzdb.GetSystemDefault();
+
+  @override
+  DateTimeZone? GetZoneOrNull(String id) {
+    final tzdbId = _mapping[id];
+    return _tzdb.GetZoneOrNull(id) ?? (tzdbId == null ? null : _tzdb.GetZoneOrNull(tzdbId));
+  }
+
+  @override
+  DateTimeZone operator [](String id) => GetZoneOrNull(id) ?? _tzdb[id];
+}
 
 final Map<String, NodaCultureInfo> _cultureCache = {};
 

@@ -36,7 +36,6 @@ fails: use `CompareTo`), `[Symbol.iterator]`. Indexers are `Get(...)`.
 | `noda-js/tzdb` | `TzdbDateTimeZoneSource`: load an NZD file at run time |
 | `noda-js/tzdb/compiler` | `CompileTzdb`, `CompileTzdbToNzd` (and `...Sync`): compile an IANA tzdata release at run time, from a URL, bytes, a `Blob` or a stream |
 | `noda-js/system` | `SystemDateTimeZoneProvider`: the host's time zones (`DateTimeZoneProviders.Bcl`): Windows' on Windows, `Intl`'s elsewhere ([docs](https://github.com/jeremy-morren/noda-client/blob/main/ts/docs/Timezones.md)) |
-| `noda-js/windows` | Windows time zone IDs ↔ IANA IDs (CLDR) |
 | `noda-js/cultures` | Every culture as a named export (`enAU`, `esES`, ...). `NodaCultureInfo.CurrentCulture` picks the host's language among those used. |
 | `noda-js/cultures/all` | Registers every culture |
 | `noda-js/calendars/hebrew`, `/islamic`, `/persian`, `/umalqura`, `/badi`, `/all` | The other calendar systems, under NodaTime's `CalendarSystem` member names (`HebrewCivil`, `GetIslamicCalendar`, ...) |

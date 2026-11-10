@@ -37,7 +37,6 @@ void main() {
 | `package:noda_dart/tzdb.dart` | `TzdbDateTimeZoneSource.FromBytes`: an NZD file loaded at run time |
 | `package:noda_dart/tzdb_compiler.dart` | Compiles an IANA `tzdata*.tar.gz` at run time |
 | `package:noda_dart/system.dart` | The system's time zones (`BclDateTimeZoneSource`): Windows' zones, the OS's tzdb, or the browser's `Intl` |
-| `package:noda_dart/windows.dart` | Windows zone IDs mapped to tzdb by CLDR |
 | `package:noda_dart/cultures.dart` | Culture data for formatting and parsing |
 | `package:noda_dart/testing.dart` | NodaTime.Testing: `FakeClock`, fake zones |
 

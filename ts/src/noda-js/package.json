@@ -95,10 +95,6 @@
       "types": "./dist/entries/calendars/badi.d.ts",
       "default": "./dist/entries/calendars/badi.js"
     },
-    "./windows": {
-      "types": "./dist/entries/windows.d.ts",
-      "default": "./dist/entries/windows.js"
-    },
     "./linq": {
       "types": "./dist/entries/linq.d.ts",
       "default": "./dist/entries/linq.js"

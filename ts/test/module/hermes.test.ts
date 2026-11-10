@@ -55,7 +55,7 @@ check("jsonRoundTrip", () => N.ZonedDateTime.fromJSON("2024-07-01T14:00:00+02 Eu
 check("duration", () => N.Duration.FromMinutes(90).TotalHours);
 check("period", () => N.Period.Between(new N.LocalDate(2024, 1, 31), new N.LocalDate(2024, 3, 1)).toString());
 check("clock", () => N.SystemClock.Instance.GetCurrentInstant().ToUnixTimeMilliseconds() > 1700000000000);
-check("windows", () => new N.WindowsIdDateTimeZoneProvider(N.tzdb).Get("AUS Eastern Standard Time").Id);
+check("windows", () => N.tzdb.Get(N.tzdbSource.WindowsMapping.PrimaryMapping.get("AUS Eastern Standard Time")).Id);
 check("errorClass", () => {
   try {
     N.tzdb.Get("Not/A_Zone");

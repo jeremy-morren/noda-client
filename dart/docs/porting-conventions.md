@@ -46,7 +46,7 @@ Headers:
 - Inside `lib/src`, import relatively. Import cycles are fine; top-level and `static final` fields are lazy and
   isolate-safe, so `static readonly` → `static final`, and `Lazy<T>`/double-checked locking → plain lazy fields.
 - Public libraries (`lib/*.dart`) mirror noda-js's entry points with `show` lists: `noda_dart.dart`, `tzdb.dart`,
-  `tzdb_bundled.dart`, `tzdb_compiler.dart`, `system.dart`, `windows.dart`, `testing.dart`, `cultures.dart`,
+  `tzdb_bundled.dart`, `tzdb_compiler.dart`, `system.dart`, `testing.dart`, `cultures.dart`,
   `calendars.dart`. Nothing under `lib/src` is public.
 
 ## Names

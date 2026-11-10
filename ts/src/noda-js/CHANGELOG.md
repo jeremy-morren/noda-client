@@ -5,6 +5,9 @@ are documented in this file. The format is based on [Keep a Changelog](https://k
 under Unreleased as they're merged; releasing turns it into the version's section.
 
 ## [Unreleased]
+### Removed
+- `noda-js/windows` (`WindowsIdDateTimeZoneProvider`, `GetCldrWindowsZones`), which NodaTime doesn't have. Map a
+  Windows ID with `tzdbSource.WindowsMapping.PrimaryMapping`.
 
 ## [3.3.1] - 2026-11-10
 ### Added
