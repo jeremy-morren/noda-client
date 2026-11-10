@@ -4,32 +4,30 @@ using System.Runtime.InteropServices;
 
 namespace NodaJs.Tools.Common;
 
-/// <summary>
-/// Locations and versions shared by the tools.
-/// </summary>
 public static class ToolEnvironment
 {
-    /// <summary>The noda-js repository root (the directory containing package.json and tools/).</summary>
     public static string RepoRoot { get; private set; } = FindRepoRoot(AppContext.BaseDirectory);
 
-    /// <summary>
-    /// The pinned NodaTime version (also its git tag): NodaTimeVersion in tools/Directory.Packages.props, which the
-    /// build embeds as assembly metadata.
-    /// </summary>
-    public static string NodaTimeTag { get; } = typeof(ToolEnvironment).Assembly
-        .GetCustomAttributes<AssemblyMetadataAttribute>()
-        .Single(attribute => attribute.Key == "NodaTimeVersion")
-        .Value!;
+    /// <summary>A commit or tag (tools/Directory.Packages.props).</summary>
+    public static string NodaTimeRef { get; } = Metadata("NodaTimeRef");
 
-    /// <summary>The local clone of NodaTime at the pinned tag.</summary>
-    public static string NodaTimeRoot => Path.Combine(RepoRoot, ".nodatime", NodaTimeTag);
+    public static string NodaTimeHead { get; } = Metadata("NodaTimeHead");
+
+    public static string NodaTimeVersion => NodaTimeHead[..8];
+
+    public static string NodaTimeRoot => Path.Combine(RepoRoot, ".nodatime", NodaTimeRef);
+
+    /// <summary>Test data both ports read (repo-relative): fixtures, and the <c>system-zones</c> export.</summary>
+    public const string TestData = "testdata";
+
+    private static string Metadata(string key) => typeof(ToolEnvironment).Assembly
+        .GetCustomAttributes<AssemblyMetadataAttribute>()
+        .Single(attribute => attribute.Key == key)
+        .Value!;
 
     public static string DotNetVersion => RuntimeInformation.FrameworkDescription.Replace(".NET ", "");
 
-    /// <summary>
-    /// The ICU version .NET is using, e.g. "72.1.0.3". Read from the runtime's internal interop
-    /// (there's no public API for it).
-    /// </summary>
+    // No public API for it.
     public static string IcuVersion
     {
         get
@@ -41,9 +39,8 @@ public static class ToolEnvironment
         }
     }
 
-    /// <summary>Checks we're running with ICU globalization and the pinned NodaTime, and returns a summary.</summary>
     public static string Describe() =>
-        $"NodaTime {NodaTimeTag}, .NET {DotNetVersion}, ICU {IcuVersion}";
+        $"NodaTime {NodaTimeVersion}, .NET {DotNetVersion}, ICU {IcuVersion}";
 
     public static void UseRepoRoot(string? path)
     {
@@ -55,17 +52,14 @@ public static class ToolEnvironment
     {
         for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "package.json")) &&
+            if (File.Exists(Path.Combine(dir.FullName, "version.txt")) &&
                 File.Exists(Path.Combine(dir.FullName, "tools", "Directory.Packages.props")))
                 return dir.FullName;
         }
         return Directory.GetCurrentDirectory();
     }
 
-    /// <summary>
-    /// Fails fast if globalization isn't ICU-backed (e.g. NLS on old Windows, or invariant mode),
-    /// since generated culture data must not depend on the host.
-    /// </summary>
+    /// <summary>Generated culture data must not depend on the host (NLS, invariant mode).</summary>
     public static void RequireIcu()
     {
         if (IcuVersion.StartsWith("unknown", StringComparison.Ordinal))

@@ -5,20 +5,24 @@ on:
     branches: [main]
   pull_request:
 
-# The report job writes a check run and (on pull requests) PR comments.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
+# Everything a job downloads is cached. Every job skips release.yml's changelog pull requests (changelog-update-*).
 jobs:
-  # Everything but the tests: type checks, the build, the linters and package checks, reproducibility, the module.
   checks:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
+        working-directory: ts
     steps:
       - uses: actions/checkout@v7
-      # The pinned SDK, for tools/NodaJs.Package (npm run build:module's archives).
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: tools/global.json
@@ -26,24 +30,21 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
-      # Every installed package's registry signature (and provenance attestation, where it has one) checks out.
+          cache-dependency-path: |
+            ts/package-lock.json
+            package-lock.json
+      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
       - run: npm audit signatures
       - run: npm run typecheck
+      - name: Changelogs
+        run: node "$GITHUB_WORKSPACE/scripts/changelog/changelog.ts" check
       - run: npm run build
-      # All the linters: ESLint (src/ stays within ES2015 built-ins, eslint-plugin-es-x; every {@link} resolves), and
-      # the package as published (exports/types resolve: publint, arethetypeswrong; a consumer type-checks against
-      # dist/). Then two clean builds give byte-identical tarballs.
       - run: npm run check:package
       - run: npm run check:reproducible
-      # The single-file module and its release archives, as the release workflows build them.
       - run: npm run build:module
 
-  # The tests, on Linux, Windows and macOS: Node and the three Playwright engines (Chromium, Firefox, WebKit) on each,
-  # plus Microsoft Edge on Windows, and Safari and Mobile Safari (iOS Simulator) on macOS. One job per OS and project.
-  # Each writes a blob report labelled with where it ran (scripts/test-blob.ps1); the report job merges them.
-  # (Public repository: macOS minutes are free; macOS jobs beyond the plan's concurrency queue.)
   test:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     name: test (${{ matrix.os }}, ${{ matrix.project }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout || 60 }}
@@ -51,27 +52,18 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        project: [node, chromium, firefox, webkit]
+        project: [node, node-longjs, chromium, firefox, webkit]
         include:
-          # Branded Edge (Playwright's msedge channel): installed on GitHub's Windows images.
-          - os: windows-latest
-            project: edge
-          # Windows on ARM64: the node project (with the arm64 native addon).
-          - os: windows-11-arm
-            project: node
-          # Safari, through safaridriver (WebdriverIO).
-          - os: macos-latest
-            project: safari
-          # Mobile Safari in the iOS Simulator, through safaridriver (WebdriverIO).
-          - os: macos-latest
-            project: ios-safari
-            timeout: 120
+          - { os: windows-latest, project: edge }
+          - { os: windows-11-arm, project: node }
+          - { os: macos-latest, project: safari }
+          - { os: macos-latest, project: ios-safari, timeout: 120 }
     defaults:
       run:
         shell: bash
+        working-directory: ts
     steps:
       - uses: actions/checkout@v7
-      # The pinned SDK, for scripts/export-system-zones.ps1 (tools/NodaJs.Tools) on Windows.
       - uses: actions/setup-dotnet@v6
         if: runner.os == 'Windows'
         with:
@@ -80,14 +72,15 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+          cache-dependency-path: |
+            ts/package-lock.json
+            package-lock.json
+      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
 
-      # The Playwright engine this job tests, cached per OS, engine and Playwright version; `install` then only
-      # downloads what's missing, and installs the OS packages it needs (those aren't cached).
       - name: Playwright version
         id: playwright
         if: contains(fromJSON('["chromium", "firefox", "webkit"]'), matrix.project)
-        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: node "$GITHUB_WORKSPACE/ts/scripts/test/playwright-version.ts"
       - uses: actions/cache@v6
         if: steps.playwright.outputs.version
         with:
@@ -100,85 +93,117 @@ jobs:
         if: steps.playwright.outputs.version
         run: npx playwright install --with-deps ${{ matrix.project }}
 
-      # The node project also runs the single-file module in Hermes (test/module/hermes.test.ts).
-      - name: Install Hermes
-        if: matrix.project == 'node'
+      # Hermes and engines without BigInt (Node.js 8, QuickJS, Chromium 66), for test/module/.
+      - uses: actions/cache@v6
+        if: startsWith(matrix.project, 'node')
+        with:
+          path: |
+            ts/node_modules/.cache/hermes
+            ts/node_modules/.cache/old-engines
+          key: engines-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('ts/scripts/test/install-hermes.*', 'ts/scripts/test/install-old-engines.*') }}
+      - if: startsWith(matrix.project, 'node')
         run: npm run test:install-hermes
-      - name: Enable safaridriver
-        if: matrix.project == 'safari' || matrix.project == 'ios-safari'
+      - if: startsWith(matrix.project, 'node')
+        run: npm run test:install-old-engines
+      # For test/bundlers/. Pinned, so setup-bun caches it.
+      - uses: oven-sh/setup-bun@v2
+        if: startsWith(matrix.project, 'node') && !(runner.os == 'Windows' && runner.arch == 'ARM64')
+        with:
+          bun-version: 1.4.4
+      - if: matrix.project == 'safari' || matrix.project == 'ios-safari'
         run: sudo safaridriver --enable
-      - name: Boot the iOS Simulator
-        if: matrix.project == 'ios-safari'
+      - if: matrix.project == 'ios-safari'
         run: npm run test:start-ios-simulator
-      # What .NET's TimeZoneInfo (NodaTime's BclDateTimeZoneSource) sees on this machine, for the Windows-only system
-      # time zone tests (test-results/system-zones.json; they're skipped without it).
-      - name: Export the system time zones
-        if: runner.os == 'Windows' && hashFiles('scripts/export-system-zones.ps1') != ''
+      # For the Windows system time zone tests.
+      - if: runner.os == 'Windows'
         run: npm run test:export-system-zones
-
-      # The Windows native addon (src/noda-js-win32-<arch>), for test/system/environment.test.ts, which runs real
-      # processes with and without it (and with and without node:ffi). The build checks it against the node:ffi
-      # implementation (native/windows/compare.ts).
-      - name: Build the native addon
-        if: runner.os == 'Windows' && matrix.project == 'node'
+      - if: runner.os == 'Windows' && startsWith(matrix.project, 'node')
         run: npm run build:native
+      - name: Native C tests
+        if: runner.os == 'Windows' && matrix.project == 'node'
+        run: npm run test:native -- --coverage
 
-      # test-results/blob/<project>-<os>-<arch>.json (or the device's label), with coverage from the node project.
       - name: Test
-        run: npm run test:blob -- -Project ${{ matrix.project }} ${{ matrix.project == 'node' && '-Coverage' || '' }}
-      # On an iOS failure: what the simulator shows, and safaridriver's logs.
-      - name: Collect the iOS Simulator's state
+        run: npm run test:blob -- --project ${{ matrix.project }} ${{ matrix.project == 'node' && '--coverage' || '' }}
+      - name: Simulator state
         if: failure() && matrix.project == 'ios-safari'
-        run: |
-          mkdir -p test-results/ios
-          xcrun simctl io booted screenshot test-results/ios/screen.png || true
-          cp -R ~/Library/Logs/com.apple.WebDriver test-results/ios/ 2>/dev/null || true
+        run: node "$GITHUB_WORKSPACE/scripts/devices/save-simulator-state.ts" --out ts/test-results/ios
       - uses: actions/upload-artifact@v7
         if: failure() && matrix.project == 'ios-safari'
         with:
           name: ios-diagnostics
-          path: test-results/ios/
+          path: ts/test-results/ios/
           retention-days: 7
           overwrite: true
-      # overwrite: a re-run job replaces its earlier attempt's artifact (the report job downloads every blob-* artifact
-      # in the run into one folder, so otherwise a failed attempt's blob can win over the re-run's).
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: blob-${{ matrix.project }}-${{ runner.os }}-${{ runner.arch }}
-          path: test-results/blob/
+          path: ts/test-results/blob/
           if-no-files-found: error
           retention-days: 7
           overwrite: true
-      # The node project's coverage on this machine (Istanbul's coverage-final.json), merged by the report job.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && runner.os == 'Windows' && matrix.project == 'node' }}
+        with:
+          name: coverage-native-${{ runner.arch }}
+          path: ts/test-results/native-coverage.lcov
+          retention-days: 7
+          overwrite: true
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && matrix.project == 'node' }}
         with:
           name: coverage-node-${{ runner.os }}-${{ runner.arch }}
-          path: coverage/coverage-final.json
+          path: ts/coverage/coverage-final.json
           if-no-files-found: error
           retention-days: 7
           overwrite: true
 
-  # Chrome on Android, in an emulator (KVM on a Linux runner, a Google APIs image, which has Chrome), driven by Appium's
-  # UiAutomator2 driver through WebdriverIO (scripts/test-android.sh).
+  # Chrome on an Android emulator, through Appium.
   android:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
+    env:
+      EMULATOR_OPTIONS: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
     defaults:
       run:
         shell: bash
+        working-directory: ts
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
-      - name: Enable KVM
-        run: bash scripts/enable-kvm.sh
-      - name: Install Appium
-        run: npm install --global appium@3.8.0 && appium driver install uiautomator2@8.7.0
+          cache-dependency-path: |
+            ts/package-lock.json
+            package-lock.json
+      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
+      - run: node "$GITHUB_WORKSPACE/scripts/devices/enable-kvm.ts"
+      - run: npm install --global appium@3.8.0 && appium driver install uiautomator2@8.7.0
+      # The system image and a booted snapshot: later runs start the emulator warm.
+      - uses: actions/cache@v6
+        id: avd
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+            /usr/local/lib/android/sdk/system-images/android-35/google_apis/x86_64
+          key: avd-35-google_apis-x86_64-v1
+      - name: Create the emulator snapshot
+        if: steps.avd.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096M
+          disk-size: 6000M
+          force-avd-creation: false
+          emulator-options: ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: false
+          script: echo "Snapshot created."
       - name: Test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -187,14 +212,16 @@ jobs:
           arch: x86_64
           ram-size: 4096M
           disk-size: 6000M
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          working-directory: ts
           script: npm run test:android
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: blob-android-chrome
-          path: test-results/blob/
+          path: ts/test-results/blob/
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -202,15 +229,395 @@ jobs:
         if: ${{ failure() }}
         with:
           name: appium-log
-          path: test-results/appium*.log
+          path: ts/test-results/appium*.log
           overwrite: true
 
-  # Merges every test job's blob report (scripts/merge-test-reports.ps1) into test-results/junit.xml (each suite named
-  # "<file> [<project>, <os-arch or device>]") and the node project's coverage from every OS (coverage/), then publishes them.
-  # Runs even when tests fail, so the failures are reported; it fails too, at the Merge step.
+  dart-checks:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/noda_dart
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - uses: actions/cache@v6
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ runner.arch }}-checks-${{ hashFiles('dart/**/pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-checks-
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: tools/global.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - run: dart pub get
+      - run: dart analyze --fatal-warnings
+      # pub skips gitignored files, so the package keeps copies.
+      - name: Licence copies match the repository's
+        run: cmp "$GITHUB_WORKSPACE/LICENSE.txt" LICENSE && cmp "$GITHUB_WORKSPACE/NOTICE.txt" NOTICE.txt
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pack.ts"
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/validate-package.ts"
+      - run: node "$GITHUB_WORKSPACE/dart/scripts/package/pana.ts"
+
+  # Full suite with coverage, then the system tests in each of dart/scripts/test/time-zones.json's zones.
+  dart-vm:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    name: dart vm (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, zones: true }
+          - { os: windows-latest, zones: true }
+          - { os: windows-11-arm }
+          - { os: macos-latest, zones: true }
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/noda_dart
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.pub-cache
+            ~/AppData/Local/Pub/Cache
+          key: pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dart/**/pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - run: dart pub get
+      - name: Test
+        run: node "$GITHUB_WORKSPACE/dart/scripts/test/test.ts" --platform vm --coverage
+      - name: System time zones
+        if: ${{ !cancelled() && matrix.zones }}
+        run: node "$GITHUB_WORKSPACE/dart/scripts/test/test-time-zones.ts"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-results-vm-${{ runner.os }}-${{ runner.arch }}
+          path: dart/noda_dart/test-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-coverage-vm-${{ runner.os }}-${{ runner.arch }}
+          path: dart/noda_dart/coverage/*.lcov.info
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # Coverage only from Chrome with dart2js (the only web leg package:test reports it for).
+  dart-web:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    name: dart web (${{ matrix.platform }}, ${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, platform: chrome, compiler: dart2js, coverage: true }
+          - { os: ubuntu-latest, platform: chrome, compiler: dart2wasm }
+          # One suite at a time: suites share the page's main thread (see dart_test.yaml).
+          - { os: ubuntu-latest, platform: firefox, compiler: dart2js, args: --concurrency=1 }
+          - { os: ubuntu-latest, platform: firefox, compiler: dart2wasm, args: --concurrency=1 }
+          - { os: windows-latest, platform: edge, compiler: dart2js }
+          - { os: macos-latest, platform: safari, compiler: dart2js }
+          - { os: ubuntu-latest, platform: node, compiler: dart2js }
+          - { os: ubuntu-latest, platform: node, compiler: dart2wasm }
+    env:
+      TZ: Europe/Berlin
+      MOZ_HEADLESS: '1'
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/noda_dart
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.pub-cache
+            ~/AppData/Local/Pub/Cache
+          key: pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dart/**/pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-${{ runner.arch }}-
+      # Also dart2wasm on Node.js, which needs WasmGC.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - if: matrix.platform == 'safari'
+        run: sudo safaridriver --enable
+      - run: dart pub get
+      - name: Test
+        run: >
+          node "$GITHUB_WORKSPACE/dart/scripts/test/test.ts" --platform ${{ matrix.platform }} --compiler ${{ matrix.compiler }}
+          ${{ matrix.coverage && '--coverage' || '' }} ${{ matrix.args }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-results-${{ matrix.platform }}-${{ matrix.compiler }}
+          path: dart/noda_dart/test-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && matrix.coverage }}
+        with:
+          name: dart-coverage-${{ matrix.platform }}-${{ matrix.compiler }}
+          path: dart/noda_dart/coverage/*.lcov.info
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # The system time zone checks in a Flutter desktop app: the zone set on the machine, and the zone TZ names
+  # (dart/scripts/flutter/desktop.ts decides the rest).
+  flutter-desktop:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    name: flutter (${{ matrix.device }}, ${{ matrix.source }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, device: windows, source: system, zone: AUS Eastern Standard Time, expected: AUS Eastern Standard Time }
+          - { os: windows-latest, device: windows, source: TZ, zone: Asia/Kolkata, expected: India Standard Time }
+          - { os: ubuntu-latest, device: linux, source: system, zone: Australia/Sydney, expected: Australia/Sydney }
+          - { os: ubuntu-latest, device: linux, source: TZ, zone: Asia/Kolkata, expected: Asia/Kolkata }
+          - { os: macos-latest, device: macos, source: system, zone: Australia/Sydney, expected: Australia/Sydney }
+          - { os: macos-latest, device: macos, source: TZ, zone: Asia/Kolkata, expected: Asia/Kolkata }
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/test_apps/system_source_flutter
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang cmake ninja-build pkg-config libgtk-3-dev xvfb > /dev/null
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: System time zone checks
+        run: >
+          node "$GITHUB_WORKSPACE/dart/scripts/flutter/desktop.ts" --device ${{ matrix.device }} --source ${{ matrix.source }}
+          --zone "${{ matrix.zone }}" --expected "${{ matrix.expected }}"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-results-flutter-${{ matrix.device }}-${{ matrix.source }}
+          path: dart/test_apps/system_source_flutter/test-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-coverage-flutter-${{ matrix.device }}-${{ matrix.source }}
+          path: dart/test_apps/system_source_flutter/coverage-out/*.lcov.info
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # Release mode: it's the code that ships. Safari ignores TZ.
+  flutter-web:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    name: flutter web (${{ matrix.browser }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, browser: chrome }
+          - { os: ubuntu-latest, browser: firefox }
+          - { os: macos-latest, browser: safari }
+    env:
+      TZ: Europe/Berlin
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/test_apps/system_source_flutter
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - if: matrix.browser == 'safari'
+        run: sudo safaridriver --enable
+      - name: System time zone checks in ${{ matrix.browser }}
+        run: node "$GITHUB_WORKSPACE/dart/scripts/flutter/web.ts" --browser ${{ matrix.browser }}
+
+  # tzdata in the time zone APEX (API 35), and in /system/usr/share/zoneinfo before it (API 28).
+  flutter-android:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    name: flutter (Android API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { api-level: 35, target: google_apis }
+          - { api-level: 28, target: default }
+    env:
+      TIME_ZONE: America/New_York
+      EMULATOR_OPTIONS: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -timezone America/New_York
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/test_apps/system_source_flutter
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - run: node "$GITHUB_WORKSPACE/scripts/devices/enable-kvm.ts"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+          cache-dependency-path: |
+            dart/test_apps/system_source_flutter/android/*.gradle*
+            dart/test_apps/system_source_flutter/android/app/*.gradle*
+            dart/test_apps/system_source_flutter/android/gradle/wrapper/gradle-wrapper.properties
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Fails before the emulator starts if the Gradle setup is broken.
+      - run: flutter build apk --debug
+      # The system image and a booted snapshot: later runs start the emulator warm.
+      - uses: actions/cache@v6
+        id: avd
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+            /usr/local/lib/android/sdk/system-images/android-${{ matrix.api-level }}/${{ matrix.target }}/x86_64
+          key: avd-${{ matrix.api-level }}-${{ matrix.target }}-x86_64-${{ env.TIME_ZONE }}-v1
+      - name: Create the emulator snapshot
+        if: steps.avd.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: false
+          script: echo "Snapshot created."
+      - name: System time zone checks on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: true
+          working-directory: dart/test_apps/system_source_flutter
+          script: node "$GITHUB_WORKSPACE/dart/scripts/flutter/android.ts" --expected ${{ env.TIME_ZONE }}
+      - uses: actions/upload-artifact@v7
+        if: ${{ failure() }}
+        with:
+          name: android-logcat-${{ matrix.api-level }}
+          path: dart/test_apps/system_source_flutter/test-results/logcat.txt
+          retention-days: 7
+          overwrite: true
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-results-flutter-android-${{ matrix.api-level }}
+          path: dart/test_apps/system_source_flutter/test-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # flutter/flutter#181771: flutter test can miss the VM service and hang; the script retries.
+  flutter-ios:
+    if: ${{ !contains(github.head_ref, 'changelog-update') }}
+    name: flutter (iOS Simulator)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      TIME_ZONE: Australia/Sydney
+    defaults:
+      run:
+        shell: bash
+        working-directory: dart/test_apps/system_source_flutter
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --prefix "$GITHUB_WORKSPACE"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # The Simulator takes the Mac's zone when it boots; systemsetup fails on GitHub's runners.
+      - name: Boot an iOS Simulator in the Mac's zone set to ${{ env.TIME_ZONE }}
+        run: node "$GITHUB_WORKSPACE/scripts/devices/start-ios-simulator.ts" --no-safari --time-zone "$TIME_ZONE"
+      - name: System time zone checks on the Simulator
+        timeout-minutes: 35
+        run: node "$GITHUB_WORKSPACE/dart/scripts/flutter/ios-simulator.ts" --expected "$TIME_ZONE"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-results-flutter-ios
+          path: dart/test_apps/system_source_flutter/test-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # Both ports' results as one check and PR comment, with coverage. Fails if any test failed.
   report:
-    needs: [test, android]
-    if: ${{ !cancelled() }}
+    needs: [test, android, dart-vm, dart-web, flutter-desktop, flutter-web, flutter-android, flutter-ios]
+    if: ${{ !cancelled() && !contains(github.head_ref, 'changelog-update') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -219,45 +626,89 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: ts
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+          cache-dependency-path: |
+            ts/package-lock.json
+            package-lock.json
+      - run: npm ci && npm ci --prefix "$GITHUB_WORKSPACE"
       - uses: actions/download-artifact@v8
         with:
           pattern: blob-*
-          path: test-results/blob
+          path: ts/test-results/blob
           merge-multiple: true
-      # One folder per node job: test-results/coverage/coverage-node-<os>-<arch>/coverage-final.json.
       - uses: actions/download-artifact@v8
         with:
           pattern: coverage-node-*
-          path: test-results/coverage
+          path: ts/test-results/coverage
       - name: Merge
         run: npm run test:merge
 
-      # Test results: job summary, a check run, and a comment on the pull request (updated on each push).
+      - uses: dart-lang/setup-dart@v1
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dart-results-*
+          path: dart/noda_dart/test-results/runs
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dart-coverage-*
+          path: dart/noda_dart/coverage/runs
+          merge-multiple: true
+      - name: Merge (noda_dart)
+        if: ${{ !cancelled() }}
+        working-directory: dart/noda_dart
+        run: dart run tool/test_report.dart test-results/runs test-results/junit.xml
+      - name: Merge coverage (noda_dart)
+        if: ${{ !cancelled() }}
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5
+        with:
+          toolpath: ${{ runner.temp }}/reportgeneratortool
+          reports: dart/noda_dart/coverage/runs/*.lcov.info
+          sourcedirs: dart/noda_dart
+          targetdir: dart/noda_dart/coverage/report
+          reporttypes: HtmlInline;MarkdownSummaryGithub
+          title: noda_dart coverage (all platforms)
+
       - name: Publish test results
-        if: ${{ !cancelled() && hashFiles('test-results/junit.xml') != '' }}
+        if: ${{ !cancelled() }}
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: test-results/junit.xml
+          files: |
+            ts/test-results/junit.xml
+            dart/noda_dart/test-results/junit.xml
           check_name: Test results
           comment_title: Test results
-          # Only list failures in the comment/summary; a million test names would overflow both.
           report_individual_runs: false
           json_suite_details: false
           large_files: true
-
-      # Coverage: job summary and a comment on the pull request (updated on each push), with per-file
-      # coverage for the files the pull request changes.
       - name: Publish coverage
-        if: ${{ !cancelled() && hashFiles('coverage/coverage-summary.json') != '' }}
+        if: ${{ !cancelled() }}
         uses: davelosert/vitest-coverage-report-action@v2
         with:
+          working-directory: ts
           json-summary-path: coverage/coverage-summary.json
           json-final-path: coverage/coverage-final.json
           file-coverage-mode: changes
+      - name: noda_dart coverage summary
+        if: ${{ !cancelled() }}
+        run: node "$GITHUB_WORKSPACE/scripts/ci/step-summary.ts" dart/noda_dart/coverage/report/SummaryGithub.md
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: dart-coverage-report
+          path: dart/noda_dart/coverage/report/
+      - name: noda_dart coverage comment
+        if: >-
+          ${{ !cancelled()
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: noda-dart-coverage
+          path: dart/noda_dart/coverage/report/SummaryGithub.md

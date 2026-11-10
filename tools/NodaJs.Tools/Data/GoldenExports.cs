@@ -6,18 +6,10 @@ using NodaTime.TimeZones;
 
 namespace NodaJs.Tools.Data;
 
-/// <summary>
-/// Golden vectors produced by running NodaTime itself:
-/// <list type="bullet">
-/// <item>formatting: sample values formatted with every standard pattern and some custom patterns, per culture
-/// (test/golden/formatting/&lt;culture&gt;.generated.ts);</item>
-/// <item>compare: the culture-aware case-insensitive comparisons NodaTime's parsers make on culture text
-/// (test/golden/compare/&lt;culture&gt;.generated.ts).</item>
-/// </list>
-/// </summary>
+/// <summary>Per culture: NodaTime formatting sample values, and its parsers' case-insensitive comparisons.</summary>
 internal static class GoldenExports
 {
-    private static readonly TsValueEncoder Encoder = new();
+    private static readonly ValueEncoder Encoder = new();
 
     private const string StandardChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -78,16 +70,15 @@ internal static class GoldenExports
         }
         JsonGoldenExports.Run(output);
         CalendarGoldenExports.Run(output);
-        output.DeleteStale("test/golden");
+        foreach (var port in LangTarget.All)
+            output.DeleteStale(port.TestRoot + "golden", port.GeneratedPattern);
     }
+
+    private sealed record FormattingCase(string Type, string Pattern, EncodedValue Value, string? Text, bool RoundTrips, string? Error);
 
     private static void WriteFormatting(GeneratedFiles output, CultureInfo culture, string fileName)
     {
-        var body = new TypescriptWriter()
-            .WriteLine("import type { FormattingGolden } from \"../types.ts\";", emptyLineAfter: true)
-            .OpenBlock("export const golden: FormattingGolden = {")
-            .Property("culture", Ts.Str(culture.Name))
-            .OpenBlock("cases: [");
+        var cases = new List<FormattingCase>();
 
         Cases("LocalDate", 
             p => LocalDatePattern.Create(p, culture), 
@@ -150,10 +141,31 @@ internal static class GoldenExports
             [new LocalDateTime(2024, 3, 1, 12, 0).InZoneLeniently(zone), new LocalDateTime(2024, 7, 1, 1, 30).InZoneLeniently(zone)],
             ["uuuu-MM-dd'T'HH:mm:ss z '('o<g>')'", "dddd HH:mm x"]);
 
-        body.CloseBlock("],")
-            .CloseBlock("};");
-        output.Write($"test/golden/formatting/{fileName}.generated.ts", "golden", body,
-            ["Each case: NodaTime's output formatting `value` with `pattern` in this culture, and whether parsing it gives the value back."]);
+        foreach (var port in LangTarget.All)
+        {
+            var body = port.NewWriter();
+            body.OpenConstObject("golden", "FormattingGolden", "../types", cases.All(c => c.Value.IsDartConstant))
+                .Property("culture", body.Str(culture.Name))
+                .OpenBlock("cases: [");
+            foreach (var c in cases)
+            {
+                // An error, or the text and whether it round-trips.
+                var parts = new
+                {
+                    type = body.Str(c.Type),
+                    pattern = body.Str(c.Pattern),
+                    value = body.Value(c.Value),
+                    error = c.Error is null ? null : body.Str(c.Error),
+                    text = c.Error is null ? body.Str(c.Text) : null,
+                    roundTrips = c.Error is null ? body.Bool(c.RoundTrips) : null,
+                };
+                body.WriteLine(body.Object("FormattingCase", parts) + ",");
+            }
+            body.CloseBlock("],")
+                .CloseConstObject();
+            output.Write(port.Test($"golden/formatting/{fileName}"), "golden", body,
+                ["NodaTime formatting `value` with `pattern`, and whether parsing round-trips."]);
+        }
 
         return;
         
@@ -169,7 +181,7 @@ internal static class GoldenExports
                 }
                 catch (InvalidPatternException)
                 {
-                    continue; // not a valid standard pattern for this type
+                    continue;
                 }
                 foreach (var value in values)
                 {
@@ -180,23 +192,12 @@ internal static class GoldenExports
                     }
                     catch (Exception e)
                     {
-                        body.WriteLine("{ " +
-                                       $"type: {Ts.Str(type)}, " +
-                                       $"pattern: {Ts.Str(patternText)}, " +
-                                       $"value: {Encoder.Encode(value)}, " +
-                                       $"error: {Ts.Str(e.GetType().Name)} " +
-                                       "},");
+                        cases.Add(new FormattingCase(type, patternText, Encoder.Encode(value), null, false, e.GetType().Name));
                         continue;
                     }
                     var parsed = pattern.Parse(text);
-                    var roundTrip = parsed.Success ? (Equals(parsed.Value, value) ? "true" : "false") : "false";
-                    body.WriteLine("{ " +
-                                   $"type: {Ts.Str(type)}, " +
-                                   $"pattern: {Ts.Str(patternText)}, " +
-                                   $"value: {Encoder.Encode(value)}, " +
-                                   $"text: {Ts.Str(text)}, " +
-                                   $"roundTrips: {roundTrip} " +
-                                   "},");
+                    var roundTrips = parsed.Success && Equals(parsed.Value, value);
+                    cases.Add(new FormattingCase(type, patternText, Encoder.Encode(value), text, roundTrips, null));
                 }
             }
         }
@@ -215,16 +216,9 @@ internal static class GoldenExports
             ["abbreviatedDayNames"] = dtf.AbbreviatedDayNames,
             ["designators"] = [dtf.AMDesignator, dtf.PMDesignator],
         };
-        var seen = new HashSet<(string, string)>();
-        var body = new TypescriptWriter()
-            .WriteLine("import type { CompareGolden } from \"../types.ts\";", emptyLineAfter: true)
-            .OpenBlock("export const golden: CompareGolden = {")
-            .Property("culture", Ts.Str(culture.Name))
-            .Comment("""
-                [text, candidate, equal]: CompareInfo.Compare(text, candidate, CompareOptions.IgnoreCase) == 0,
-                as ValueCursor.MatchCaseInsensitive does with text of the candidate's length.
-                """)
-            .OpenBlock("cases: [");
+        // Equal follows from the text and candidate, so the set holds each pair once.
+        var seen = new HashSet<CompareCase>();
+        var cases = new List<CompareCase>();
         var compareInfo = culture.CompareInfo;
         foreach (var names in lists.Values)
         {
@@ -237,15 +231,29 @@ internal static class GoldenExports
                     if (text.Length < candidate.Length)
                         continue;
                     var sub = text[..candidate.Length];
-                    if (sub == candidate || !seen.Add((sub, candidate)))
+                    if (sub == candidate)
                         continue;
-                    var equal = compareInfo.Compare(sub, candidate, CompareOptions.IgnoreCase) == 0;
-                    body.WriteLine($"[{Ts.Str(sub)}, {Ts.Str(candidate)}, {Ts.Bool(equal)}],");
+                    var compareCase = new CompareCase(sub, candidate, compareInfo.Compare(sub, candidate, CompareOptions.IgnoreCase) == 0);
+                    if (seen.Add(compareCase))
+                        cases.Add(compareCase);
                 }
             }
         }
-        body.CloseBlock("],")
-            .CloseBlock("};");
-        output.Write($"test/golden/compare/{fileName}.generated.ts", "golden", body);
+
+        foreach (var port in LangTarget.All)
+        {
+            var body = port.NewWriter();
+            body.OpenConstObject("golden", "CompareGolden", "../types", constant: true)
+                .Property("culture", body.Str(culture.Name))
+                .Comment("[text, candidate, CompareInfo.Compare(text, candidate, IgnoreCase) == 0], as ValueCursor.MatchCaseInsensitive.")
+                .OpenBlock("cases: [");
+            foreach (var c in cases)
+                body.WriteLine(body.Tuple([body.Str(c.Text), body.Str(c.Candidate), body.Bool(c.Equal)]) + ",");
+            body.CloseBlock("],")
+                .CloseConstObject();
+            output.Write(port.Test($"golden/compare/{fileName}"), "golden", body);
+        }
     }
+
+    private sealed record CompareCase(string Text, string Candidate, bool Equal);
 }

@@ -1,0 +1,12 @@
+name: system_source_checks
+description: >-
+  SystemDateTimeZoneSource checks shared by noda_dart's tests and the Flutter test app.
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  matcher: any
+  noda_dart:
+    path: ../../noda_dart

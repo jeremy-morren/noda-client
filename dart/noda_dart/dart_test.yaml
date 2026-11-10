@@ -1,0 +1,21 @@
+override_platforms:
+  node:
+    settings:
+      # dart2wasm's Uri.base needs globalThis.location.
+      arguments: --import=./test/support/node_location.ts
+
+# Heavy suites can miss the browser's 30 s load timeout, which follows the test timeout until package:test 1.34.0
+# (dart-lang/test#2786); then use `suite_load_timeout: 10m` instead.
+on_platform:
+  chrome:
+    timeout: 10x
+  safari:
+    timeout: 10x
+  firefox:
+    timeout: 10x
+  edge:
+    timeout: 10x
+
+tags:
+  # Needs the machine's time zones; CI runs them in configured zones.
+  system:

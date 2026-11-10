@@ -1,136 +1,14 @@
-﻿using System.Text;
-// ReSharper disable UnusedMethodReturnValue.Global
-// ReSharper disable MemberCanBePrivate.Global
-
-namespace NodaJs.Tools.Common;
+﻿namespace NodaJs.Tools.Common;
 
 /// <summary>
-/// A simple writer for TypeScript files: lines at the current indentation (two spaces per level), with "\n" line
-/// endings. <see cref="GeneratedFiles"/> writes the result as UTF-8 without a BOM.
+/// A code writer for TypeScript syntax.
 /// </summary>
-/// <remarks>
-/// Most code writes whole lines (<see cref="WriteLine(string, bool)"/>, <see cref="Property"/>,
-/// <see cref="OpenBlock"/>/<see cref="CloseBlock"/>). A value that starts in the middle of a line, such as an object
-/// literal after <c>export const x = </c>, uses <see cref="OpenInline"/>/<see cref="CloseInline"/>, and the caller
-/// finishes the line with <see cref="AppendOnLine"/> and <see cref="AppendNewline"/>.
-/// </remarks>
-public class TypescriptWriter
+public sealed class TypescriptWriter : CodeWriter
 {
-    private readonly StringBuilder _sb = new();
-
-    private int _indentLevel;
-
-    /// <summary>Indents the lines written after this by one more level.</summary>
-    public TypescriptWriter PushIndent()
+    protected override CodeWriter WriteDocComment(IReadOnlyList<string> lines)
     {
-        _indentLevel++;
-        return this;
-    }
-
-    /// <summary>Undoes a <see cref="PushIndent"/>.</summary>
-    public TypescriptWriter PopIndent()
-    {
-        if (_indentLevel == 0)
-            throw new InvalidOperationException("PopIndent without a matching PushIndent.");
-        _indentLevel--;
-        return this;
-    }
-
-    private string Indent => new(' ', _indentLevel * 2);
-
-    /// <summary>
-    /// Writes the current indentation to the output.
-    /// </summary>
-    public TypescriptWriter AppendIndent()
-    {
-        _sb.Append(Indent);
-        return this;
-    }
-
-    /// <summary>
-    /// Appends text to the output without indentation or a newline.
-    /// </summary>
-    public TypescriptWriter AppendOnLine(string text)
-    {
-        _sb.Append(text);
-        return this;
-    }
-
-    /// <summary>
-    /// Writes a newline to the output.
-    /// </summary>
-    public TypescriptWriter AppendNewline()
-    {
-        _sb.Append('\n');
-        return this;
-    }
-
-    /// <summary>Writes an empty line (without indentation).</summary>
-    public TypescriptWriter WriteLine() => AppendNewline();
-
-    /// <summary>
-    /// Writes a line to the output, with indentation and a newline, and optionally an empty line after it.
-    /// </summary>
-    public TypescriptWriter WriteLine(string line, bool emptyLineAfter = false)
-    {
-        AppendIndent();
-        _sb.Append(line);
-        if (emptyLineAfter)
-            AppendNewline();
-        return AppendNewline();
-    }
-
-    /// <summary>
-    /// Writes multiple lines to the output, with indentation and a newline after each line. Optionally adds an empty line after the last line.
-    /// </summary>
-    public TypescriptWriter WriteLines(IEnumerable<string> lines, bool emptyLineAfter = false)
-    {
-        foreach (var line in lines)
-            WriteLine(line);
-        if (emptyLineAfter)
-            AppendNewline();
-        return this;
-    }
-
-    /// <summary>Writes a line (e.g. <c>export const x = {</c>) and indents the lines after it.</summary>
-    public TypescriptWriter OpenBlock(string line) => WriteLine(line).PushIndent();
-
-    /// <summary>Unindents and writes the line that closes a block (e.g. <c>};</c>).</summary>
-    public TypescriptWriter CloseBlock(string line, bool emptyLineAfter = false) => PopIndent().WriteLine(line, emptyLineAfter);
-
-    /// <summary>
-    /// Appends <paramref name="open"/> (e.g. <c>{</c>) to the current line, ends the line and indents the lines after
-    /// it: for a value that starts in the middle of a line.
-    /// </summary>
-    public TypescriptWriter OpenInline(string open) => AppendOnLine(open).AppendNewline().PushIndent();
-
-    /// <summary>
-    /// Unindents and starts a line with <paramref name="close"/> (e.g. <c>}</c>) without ending it, so the caller can
-    /// finish it (e.g. with <c>,</c> or <c>);</c>).
-    /// </summary>
-    public TypescriptWriter CloseInline(string close) => PopIndent().AppendIndent().AppendOnLine(close);
-
-    /// <summary>Writes an object literal property line: <c>name: value,</c>.</summary>
-    public TypescriptWriter Property(string name, string value) => WriteLine($"{name}: {value},");
-
-    /// <summary>Writes each line of <paramref name="text"/> as a <c>//</c> comment.</summary>
-    public TypescriptWriter Comment(string text)
-    {
-        // TrimEnd('\r'): a raw string literal has the source file's line endings, which may be CRLF.
-        foreach (var line in text.Split('\n').Select(l => l.TrimEnd('\r')))
-            WriteLine(line.Length == 0 ? "//" : "// " + line);
-        return this;
-    }
-
-    /// <summary>
-    /// Writes a JSDoc comment: nothing for empty text, <c>/** text */</c> for one line,
-    /// otherwise one <c> * </c> line per (trimmed, non-empty) line of <paramref name="text"/>.
-    /// </summary>
-    public TypescriptWriter DocComment(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
+        if (lines.Count == 0)
             return this;
-        var lines = text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         if (lines.Count == 1)
             return WriteLine($"/** {lines[0]} */");
         WriteLine("/**");
@@ -139,5 +17,39 @@ public class TypescriptWriter
         return WriteLine(" */");
     }
 
-    public override string ToString() => _sb.ToString();
+    protected override string RenderDocPart(DocPart part) => part switch
+    {
+        TextPart text => text.Text,
+        CodePart code => $"`{code.Code}`",
+        LinkPart link => $"{{@link {link.Target}}}",
+        MovedPart moved => $"`{moved.Member}` (noda-js/calendars/{moved.Module})",
+        _ => throw new ArgumentException($"Unknown doc part {part}"),
+    };
+
+    public override string Str(string? value) => Ts.Str(value);
+
+    public override string Int(long value) => Ts.Int(value);
+
+    public override string SourceInt(long value) => Ts.SourceInt(value);
+
+    public override string Value(EncodedValue value) => TsValueEncoder.Render(value);
+
+    public override string Tuple(IEnumerable<string> items) => List(items);
+
+    public override string Object(string type, object parts) =>
+        "{ " + string.Join(", ", NamedValue<string>.FromObject(parts).Select(p => $"{p.Name}: {p.Value}")) + " }";
+
+    public override CodeWriter OpenObject(string type) => OpenInline("{");
+
+    public override CodeWriter CloseObject() => CloseInline("}");
+
+    public override CodeWriter OpenObjectLine(string type, string? name = null) => OpenBlock(name is null ? "{" : $"{name}: {{");
+
+    public override CodeWriter CloseObjectLine() => CloseBlock("},");
+
+    public override CodeWriter OpenConstObject(string name, string type, string typesModule, bool constant) =>
+        WriteLine($"import type {{ {type} }} from {Ts.Str(typesModule + ".ts")};", emptyLineAfter: true)
+            .OpenBlock($"export const {name}: {type} = {{");
+
+    public override CodeWriter CloseConstObject() => CloseBlock("};");
 }

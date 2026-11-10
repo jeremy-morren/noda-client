@@ -1,18 +1,12 @@
+using System.Globalization;
 using NodaJs.Tools.Common;
 using NodaTime;
 
 namespace NodaJs.Tools.Data;
 
 /// <summary>
-/// Golden calendar data (test/golden/calendars/&lt;calendar&gt;.generated.ts), from NodaTime itself: for every year of
-/// every calendar system, whether it's a leap year, its length, and the length of each month and its start (in days
-/// from the start of the year). This stands in for NodaTime's tests that compare its calendars with the BCL's day by
-/// day ("BclThroughHistory"): those prove NodaTime matches the BCL; matching NodaTime then matches it too.
-/// <para>
-/// Most years share their shape (e.g. every common year of a calendar), so a file lists the distinct shapes
-/// (<c>yearTypes</c>) and gives each year's index into that list (<c>years</c>, from <c>minYear</c>). Days since the
-/// epoch follow from <c>minDays</c> (the start of <c>minYear</c>) and each year's length.
-/// </para>
+/// Every year of every calendar (leap, length, month lengths and starts), as distinct year types and each year's index.
+/// Stands in for NodaTime's "BclThroughHistory" tests.
 /// </summary>
 internal static class CalendarGoldenExports
 {
@@ -24,12 +18,10 @@ internal static class CalendarGoldenExports
             Write(output, calendar);
     }
 
-    /// <summary>The file name for a calendar's golden files: its ID in lower case, with spaces as hyphens.</summary>
     internal static string FileName(CalendarSystem calendar) => calendar.Id.ToLowerInvariant().Replace(' ', '-');
 
     private static void Write(GeneratedFiles output, CalendarSystem calendar)
     {
-        // NodaTime's internals: see NodaTimeInternals.
         var calculator = NodaTimeInternals.GetYearMonthDayCalculator(calendar);
 
         var types = new List<YearType>();
@@ -54,30 +46,33 @@ internal static class CalendarGoldenExports
         var minDays = NodaTimeInternals.MinDays(calendar);
         var maxDays = NodaTimeInternals.MaxDays(calendar);
 
-        var body = new TypescriptWriter()
-            .WriteLine("import type { CalendarGolden } from \"../types.ts\";", emptyLineAfter: true)
-            .OpenBlock("export const golden: CalendarGolden = {")
-            .Property("id", Ts.Str(calendar.Id))
-            .Property("minYear", Ts.Int(calendar.MinYear))
-            .Property("maxYear", Ts.Int(calendar.MaxYear))
-            .Property("minDays", Ts.Int(minDays))
-            .Property("maxDays", Ts.Int(maxDays))
-            .OpenBlock("yearTypes: [");
-        foreach (var type in types)
-            body.WriteLine("{ " +
-                           $"leap: {Ts.Bool(type.Leap)}, " +
-                           $"days: {type.Days}, " +
-                           $"monthLengths: [{string.Join(", ", type.MonthLengths)}], " +
-                           $"monthStarts: [{string.Join(", ", type.MonthStarts)}] " +
-                           "},");
-        body.CloseBlock("],")
-            .OpenBlock("years: [");
-        for (var i = 0; i < indexes.Count; i += IndexesPerLine)
-            body.WriteLine(string.Join(", ", indexes.Skip(i).Take(IndexesPerLine)) + ",");
-        body.CloseBlock("],")
-            .CloseBlock("};");
-        output.Write($"test/golden/calendars/{FileName(calendar)}.generated.ts", "golden", body,
-            [$"NodaTime's {calendar.Id} calendar: every year's type (leap, length, month lengths and starts)."]);
+        foreach (var port in LangTarget.All)
+        {
+            var body = port.NewWriter();
+            body.OpenConstObject("golden", "CalendarGolden", "../types", constant: true)
+                .Property("id", body.Str(calendar.Id))
+                .Property("minYear", body.Int(calendar.MinYear))
+                .Property("maxYear", body.Int(calendar.MaxYear))
+                .Property("minDays", body.Int(minDays))
+                .Property("maxDays", body.Int(maxDays))
+                .OpenBlock("yearTypes: [");
+            foreach (var type in types)
+                body.WriteLine(body.Object("CalendarYearType", new
+                {
+                    leap = body.Bool(type.Leap),
+                    days = type.Days.ToString(CultureInfo.InvariantCulture),
+                    monthLengths = body.List(type.MonthLengths.Select(l => l.ToString(CultureInfo.InvariantCulture))),
+                    monthStarts = body.List(type.MonthStarts.Select(s => s.ToString(CultureInfo.InvariantCulture))),
+                }) + ",");
+            body.CloseBlock("],")
+                .OpenBlock("years: [");
+            for (var i = 0; i < indexes.Count; i += IndexesPerLine)
+                body.WriteLine(string.Join(", ", indexes.Skip(i).Take(IndexesPerLine)) + ",");
+            body.CloseBlock("],")
+                .CloseConstObject();
+            output.Write(port.Test($"golden/calendars/{FileName(calendar)}"), "golden", body,
+                [$"NodaTime's {calendar.Id} calendar: every year's type (leap, length, month lengths and starts)."]);
+        }
     }
 
     private static int DaysSinceEpoch(LocalDate date) => NodaTimeInternals.DaysSinceEpoch(ref date);

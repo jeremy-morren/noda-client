@@ -3,12 +3,9 @@ using System.Text;
 
 namespace NodaJs.Tools.Common;
 
-/// <summary>
-/// Helpers for writing TypeScript source text.
-/// </summary>
+/// <summary>TypeScript source literals.</summary>
 public static class Ts
 {
-    /// <summary>A double-quoted TS string literal.</summary>
     public static string Str(string? value)
     {
         if (value is null)
@@ -24,8 +21,7 @@ public static class Ts
                 case '\r': builder.Append(@"\r"); break;
                 case '\t': builder.Append(@"\t"); break;
                 default:
-                    // Escape controls, surrogates, format characters (e.g. RLM), non-ASCII spaces (e.g. NBSP,
-                    // narrow NBSP) and line/paragraph separators, so the source is unambiguous.
+                    // Invisible or ambiguous characters (controls, RLM, NBSP, separators...).
                     var category = char.GetUnicodeCategory(c);
                     if (c < 0x20 || 
                         c == 0x7f || 
@@ -44,11 +40,7 @@ public static class Ts
 
     public static string Bool(bool value) => value ? "true" : "false";
 
-    /// <summary>
-    /// An integer literal for generated <em>source</em> (src/), which has no bigint (noda-js targets ES2015): a number
-    /// literal when the value is exactly representable as a double, otherwise a decimal string literal (the exact form
-    /// that noda-js APIs taking a C# long accept).
-    /// </summary>
+    /// <summary>For src/ (ES2015, no bigint): a number if exact as a double, else a decimal string.</summary>
     public static string SourceInt(long value) =>
         value == long.MinValue || (Math.Abs((double) value) < 9223372036854775808d && (long) (double) value == value)
             ? value.ToString(CultureInfo.InvariantCulture)
@@ -58,22 +50,16 @@ public static class Ts
     public static string SourceInt(ulong value) =>
         value <= long.MaxValue ? SourceInt((long) value) : Str(value.ToString(CultureInfo.InvariantCulture));
 
-    /// <summary>
-    /// An integer literal for generated <em>test</em> data (test/, which runs on Node): a number if it's a safe integer,
-    /// otherwise a bigint literal. Never use this for src/; see <see cref="SourceInt(long)"/>.
-    /// </summary>
-    public static string Int(long value) =>
-        Math.Abs((double) value) <= 9007199254740991d && value != long.MinValue
-            ? value.ToString(CultureInfo.InvariantCulture)
-            : value.ToString(CultureInfo.InvariantCulture) + "n";
+    /// <summary>For test/ only: a number if safe, else a bigint.</summary>
+    public static string Int(long value) => Int((System.Numerics.BigInteger) value);
 
-    public static string Int(ulong value) =>
-        value <= 9007199254740991UL ? value.ToString(CultureInfo.InvariantCulture) : value.ToString(CultureInfo.InvariantCulture) + "n";
+    /// <inheritdoc cref="Int(long)"/>
+    public static string Int(System.Numerics.BigInteger value) =>
+        value.ToString(CultureInfo.InvariantCulture) + (System.Numerics.BigInteger.Abs(value) <= Dart.MaxSafeInteger ? "" : "n");
 
-    /// <summary>A bigint literal, for generated test data only (see <see cref="Int(long)"/>).</summary>
+    /// <summary>For test/ only.</summary>
     public static string BigInt(System.Numerics.BigInteger value) => value.ToString(CultureInfo.InvariantCulture) + "n";
 
-    /// <summary>A number literal that round-trips the double exactly.</summary>
     public static string Double(double value)
     {
         if (double.IsNaN(value)) return "NaN";
@@ -83,11 +69,7 @@ public static class Ts
         return value.ToString("R", CultureInfo.InvariantCulture).Replace("E+", "e").Replace("E-", "e-");
     }
 
-    /// <summary>
-    /// Converts a C# member name to the noda-js camelCase name: the leading run of capitals is
-    /// lower-cased as a block, except the last capital when it starts the next word
-    /// ("AMDesignator" → "amDesignator", "ToUnixTimeTicks" → "toUnixTimeTicks", "ISO" → "iso").
-    /// </summary>
+    /// <summary>"AMDesignator" → "amDesignator", "ToUnixTimeTicks" → "toUnixTimeTicks", "ISO" → "iso".</summary>
     public static string CamelCase(string name)
     {
         if (string.IsNullOrEmpty(name) || !char.IsUpper(name[0]))
@@ -97,12 +79,11 @@ public static class Ts
             upperRun++;
         if (upperRun == 1 || upperRun == name.Length)
             return name[..upperRun].ToLowerInvariant() + name[upperRun..];
-        // "AMDesignator": run "AMD"; keep the "D" which begins "Designator" unless the next char isn't lower-case.
         var lowerCount = char.IsLower(name[upperRun]) ? upperRun - 1 : upperRun;
         return name[..lowerCount].ToLowerInvariant() + name[lowerCount..];
     }
 
-    /// <summary>A valid TS identifier for a culture name ("fr-FR" → "frFR", "" → "invariant").</summary>
+    /// <summary>"fr-FR" → "frFR", "" → "invariant".</summary>
     public static string CultureIdentifier(string cultureName)
     {
         if (cultureName == "")

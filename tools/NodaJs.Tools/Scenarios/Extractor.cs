@@ -11,14 +11,8 @@ using NUnit.Framework.Internal;
 namespace NodaJs.Tools.Scenarios
 {
     /// <summary>
-    /// The <c>scenarios</c> command: every NUnit test in NodaTime.Test and NodaTime.TzdbCompiler.Test as a test
-    /// scenario: the fixture, method, source location, and (for parameterized tests) every case's arguments and expected
-    /// result. Cases are enumerated by NUnit itself (DefaultTestAssemblyBuilder), so TestCase, TestCaseSource, Values,
-    /// inherited tests, etc. come out exactly as NUnit would run them. Re-running after a NodaTime upgrade picks up new
-    /// tests.
-    /// Output: test/scenarios/&lt;namespace path&gt;/&lt;Fixture&gt;.generated.ts (NodaTime.TzdbCompiler.Test's under
-    /// test/scenarios/TzdbCompiler/), test/scenarios/index.generated.ts and test/scenarios/cultures.generated.ts (data
-    /// for every culture the cases refer to).
+    /// <c>scenarios</c>: every NUnit test in NodaTime.Test and NodaTime.TzdbCompiler.Test, with its cases as NUnit itself
+    /// enumerates them.
     /// </summary>
     internal sealed class Extractor(GeneratedFiles output)
     {
@@ -29,61 +23,125 @@ namespace NodaJs.Tools.Scenarios
         private static readonly Assembly TestingAssembly = typeof(NodaTime.Testing.FakeClock).Assembly;
         private static readonly Assembly CompilerAssembly = typeof(NodaTime.TzdbCompiler.Tzdb.TzdbDatabase).Assembly;
 
-        /// <summary>
-        /// The test assemblies, each with its root namespace and the folder under test/scenarios its fixtures go to
-        /// (sub-namespaces become sub-folders).
-        /// </summary>
-        private static readonly (Assembly Assembly, string Namespace, string Folder)[] TestProjects =
+        private sealed record TestProject(Assembly Assembly, string Namespace, string Folder);
+
+        private static readonly TestProject[] TestProjects =
         [
-            (TestAssembly, "NodaTime.Test", ""),
-            (CompilerTestAssembly, "NodaTime.TzdbCompiler.Test", "TzdbCompiler/"),
+            new(TestAssembly, "NodaTime.Test", ""),
+            new(CompilerTestAssembly, "NodaTime.TzdbCompiler.Test", "TzdbCompiler/"),
         ];
 
         // The compiler's assemblies come last, so the names of NodaTime's own instances don't change.
         private readonly StaticReferences _statics = new([NodaTimeAssembly, TestingAssembly, TestAssembly, CompilerAssembly, CompilerTestAssembly]);
         private readonly SortedDictionary<string, CultureInfo> _cultures = new(StringComparer.Ordinal);
         private readonly SourceLocations _locations = new(TestProjects.Select(p => p.Assembly));
-        private readonly List<(string Name, string Rule, string Reason)> _exclusions = LoadExclusions();
-        private TsValueEncoder _encoder = null!;
+        private readonly List<ExclusionRule> _exclusions = LoadExclusions();
+        private ValueEncoder _encoder = null!;
+
+        private sealed record FixtureModel(string Name, string Path, string Source, string? Excluded, IReadOnlyList<TestModel> Tests)
+        {
+            public int CaseCount => Tests.Sum(t => t.Cases?.Count ?? 0);
+        }
+
+        /// <summary><see cref="Cases"/> is null when <see cref="Excluded"/> isn't "".</summary>
+        private sealed record TestModel(
+            string Method,
+            string Source,
+            IReadOnlyList<string> Parameters,
+            string? DeclaredIn,
+            string Excluded,
+            RunStateModel? RunState,
+            IReadOnlyList<CaseModel>? Cases);
+
+        private sealed record CaseModel(
+            IReadOnlyList<EncodedValue> Args,
+            string? EncodingError,
+            bool HasExpected,
+            EncodedValue? Expected,
+            string? Description,
+            RunStateModel? RunState)
+        {
+            private IEnumerable<EncodedValue> Values => Expected is null ? Args : Args.Append(Expected);
+
+            public bool ExceedsDoublePrecision => Values.Any(v => v.ExceedsDoublePrecision);
+
+            public bool IsDartConstant => Values.All(v => v.IsDartConstant);
+        }
+
+        /// <summary>A non-runnable state: <c>ignored: "reason"</c>, <c>explicit: true</c>, ...</summary>
+        private sealed record RunStateModel(RunState State, string? Reason)
+        {
+            /// <summary>The value of <paramref name="state"/>'s property; null (left out) for the other states.</summary>
+            public string? Value(CodeWriter writer, RunState state) =>
+                State != state ? null : Reason is null ? writer.Bool(true) : writer.Str(Reason);
+        }
+
+        /// <summary>A rule of tools/scenario-exclusions.txt: a test name, or a prefix ending in '*'.</summary>
+        private sealed record ExclusionRule(string Rule, string Reason);
+
+        private sealed record FoundFixture(TestSuite Fixture, TestProject Project);
+
+        /// <summary>A fixture in the index: its NUnit full name and generated file's path.</summary>
+        private sealed record IndexEntry(string Name, string Path);
 
         public void Run()
         {
-            _encoder = new TsValueEncoder { Override = Override };
-            // Test data classes, and the compiler's (mostly internal) types, are encoded field by field.
+            _encoder = new ValueEncoder { Override = Override };
             _encoder.StructuralAssemblies.UnionWith([TestAssembly, CompilerTestAssembly, CompilerAssembly]);
 
-            var fixtures = new List<(TestSuite Fixture, string Namespace, string Folder)>();
-            foreach (var (assembly, ns, folder) in TestProjects)
-            {
-                var root = new DefaultTestAssemblyBuilder().Build(assembly, new Dictionary<string, object>());
-                var found = new List<TestSuite>();
-                CollectFixtures(root, found);
-                fixtures.AddRange(found.Select(f => (f, ns, folder)));
-            }
+            var fixtures = TestProjects
+                .SelectMany(project =>
+                {
+                    var root = new DefaultTestAssemblyBuilder().Build(project.Assembly, new Dictionary<string, object>());
+                    var found = new List<TestSuite>();
+                    CollectFixtures(root, found);
+                    return found.Select(f => new FoundFixture(f, project));
+                })
+                .OrderBy(f => f.Fixture.FullName, StringComparer.Ordinal)
+                .ToList();
 
-            var index = new List<(string Name, string Module)>();
             int caseCount = 0, testCount = 0;
-            foreach (var (fixture, ns, folder) in fixtures.OrderBy(f => f.Fixture.FullName, StringComparer.Ordinal))
-            {
-                var (relativePath, body, tests, cases) = WriteFixture(fixture, ns, folder);
-                output.Write(relativePath, Command, body);
-                index.Add((fixture.FullName, "./" + Path.GetRelativePath("test/scenarios", relativePath).Replace('\\', '/')));
-                testCount += tests;
-                caseCount += cases;
-            }
+            var index = fixtures
+                .Select(f =>
+                {
+                    var model = ExtractFixture(f.Fixture, f.Project);
+                    foreach (var port in LangTarget.All)
+                        output.Write(port.Test("scenarios/" + model.Path), Command, WriteFixture(port.NewWriter(), model));
+                    testCount += model.Tests.Count;
+                    caseCount += model.CaseCount;
+                    return new IndexEntry(model.Name, model.Path);
+                })
+                .ToList();
 
-            var indexBody = new TypescriptWriter()
+            string[] indexHeader = [$"{index.Count} fixtures, {testCount} test methods, {caseCount} cases."];
+            const string indexDoc = "Every NodaTime.Test and NodaTime.TzdbCompiler.Test fixture, by NUnit full name, loaded on demand.";
+            var tsIndex = new TypescriptWriter()
                 .WriteLine("import type { ScenarioFixture } from \"./types.ts\";", emptyLineAfter: true)
-                .DocComment("Every NodaTime.Test and NodaTime.TzdbCompiler.Test fixture, by NUnit full name, loaded on demand.")
+                .DocComment(indexDoc)
                 .OpenBlock("export const scenarioFixtures: Readonly<Record<string, () => Promise<ScenarioFixture>>> = {");
-            foreach (var (name, module) in index)
-                indexBody.Property(Ts.Str(name), $"async () => (await import({Ts.Str(module)})).fixture");
-            indexBody.CloseBlock("};");
-            output.Write("test/scenarios/index.generated.ts", Command, indexBody,
-                [$"{index.Count} fixtures, {testCount} test methods, {caseCount} cases."]);
+            foreach (var fixture in index)
+                tsIndex.Property(Ts.Str(fixture.Name), $"async () => (await import({Ts.Str($"./{fixture.Path}.generated.ts")})).fixture");
+            tsIndex.CloseBlock("};");
+            output.Write(LangTarget.TypeScript.Test("scenarios/index"), Command, tsIndex, indexHeader);
 
-            WriteCultures();
-            output.DeleteStale("test/scenarios");
+            // Lazy top-level finals, not deferred imports: dart2js can't load those on Node.js.
+            var dartIndex = new DartWriter()
+                .WriteLine("import 'types.dart';", emptyLineAfter: true);
+            for (var i = 0; i < index.Count; i++)
+                dartIndex.WriteLine($"import {Dart.Str($"{index[i].Path}.generated.dart")} as f{i};");
+            dartIndex.WriteLine()
+                .DocComment("Every NodaTime.Test and NodaTime.TzdbCompiler.Test fixture, by NUnit full name, built on first use.")
+                .OpenBlock("final Map<String, ScenarioFixture Function()> scenarioFixtures = {");
+            for (var i = 0; i < index.Count; i++)
+                dartIndex.Property(Dart.Str(index[i].Name), $"() => f{i}.fixture");
+            dartIndex.CloseBlock("};");
+            output.Write(LangTarget.Dart.Test("scenarios/index"), Command, dartIndex, indexHeader);
+
+            foreach (var port in LangTarget.All)
+            {
+                WriteCultures(port);
+                output.DeleteStale(port.TestRoot + "scenarios", port.GeneratedPattern);
+            }
             Console.WriteLine($"{index.Count} fixtures, {testCount} test methods, {caseCount} cases.");
         }
 
@@ -95,139 +153,174 @@ namespace NodaJs.Tools.Scenarios
                 CollectFixtures(child, fixtures);
         }
 
-        private (string Path, TypescriptWriter Body, int Tests, int Cases) WriteFixture(TestSuite fixture, string rootNamespace, string rootFolder)
+        private FixtureModel ExtractFixture(TestSuite fixture, TestProject project)
         {
             var type = fixture.TypeInfo!.Type;
-            var ns = type.Namespace ?? rootNamespace;
-            var folder = ns == rootNamespace ? rootFolder : rootFolder + ns[(rootNamespace.Length + 1)..].Replace('.', '/') + "/";
-            var fileName = TsValueEncoder.NestedName(type) + (fixture.Arguments.Length > 0 ? "(" + string.Join(",", fixture.Arguments) + ")" : "");
-            var relativePath = $"test/scenarios/{folder}{SafeFileName(fileName)}.generated.ts";
-            var typesImport = string.Concat(Enumerable.Repeat("../", folder.Count(c => c == '/'))) + "types.ts";
-            if (!typesImport.StartsWith('.'))
-                typesImport = "./" + typesImport;
-
-            var body = new TypescriptWriter()
-                .WriteLine($"import type {{ ScenarioFixture }} from {Ts.Str(typesImport)};", emptyLineAfter: true)
-                .OpenBlock("export const fixture: ScenarioFixture = {")
-                .Property("name", Ts.Str(fixture.FullName))
-                .Property("source", Ts.Str(_locations.TypeSource(type)));
+            var ns = type.Namespace ?? project.Namespace;
+            var folder = ns == project.Namespace ? project.Folder : project.Folder + ns[(project.Namespace.Length + 1)..].Replace('.', '/') + "/";
+            var fileName = ValueEncoder.NestedName(type) + (fixture.Arguments.Length > 0 ? "(" + string.Join(",", fixture.Arguments) + ")" : "");
             var fixtureExclusion = Exclusion(fixture.FullName);
-            if (fixtureExclusion is not null)
-                body.Property("excluded", Ts.Str(fixtureExclusion));
-            body.OpenBlock("tests: [");
 
-            int tests = 0, cases = 0;
-            // Each child is a TestMethod (simple test) or a ParameterizedMethodSuite of TestMethods.
+            var tests = new List<TestModel>();
             foreach (var child in fixture.Tests.Cast<Test>().OrderBy(t => t.Method?.MethodInfo.MetadataToken ?? 0).ThenBy(t => t.Name, StringComparer.Ordinal))
             {
                 var method = child.Method?.MethodInfo;
                 if (method is null)
                     continue;
-                tests++;
                 var methodExclusion = fixtureExclusion ?? Exclusion($"{fixture.FullName}.{method.Name}") ?? "";
-                body.OpenBlock("{")
-                    .Property("method", Ts.Str(method.Name))
-                    .Property("source", Ts.Str(_locations.MethodSource(method)));
-                var parameters = method.GetParameters();
-                if (parameters.Length > 0)
-                    body.Property("parameters", $"[{string.Join(", ", parameters.Select(p => Ts.Str($"{TypeName(p.ParameterType)} {p.Name}")))}]");
-                if (method.DeclaringType != type)
-                    body.Property("declaredIn", Ts.Str(TsValueEncoder.NestedName(method.DeclaringType!)));
-                if (methodExclusion.Length > 0)
-                    body.Property("excluded", Ts.Str(methodExclusion));
-                if (RunStateProperty(child) is { } runState)
-                    body.WriteLine(runState + ",");
+                var parameterized = child is ParameterizedMethodSuite;
                 var testCases = child is ParameterizedMethodSuite suite ? suite.Tests.Cast<TestMethod>().ToList() : [(TestMethod) child];
-                if (methodExclusion.Length > 0)
+                tests.Add(new TestModel(
+                    method.Name,
+                    _locations.MethodSource(method),
+                    method.GetParameters().Select(p => $"{TypeName(p.ParameterType)} {p.Name}").ToList(),
+                    method.DeclaringType != type ? ValueEncoder.NestedName(method.DeclaringType!) : null,
+                    methodExclusion,
+                    GetRunState(child),
+                    methodExclusion.Length > 0 ? null : testCases.Select(c => ExtractCase(c, parameterized)).ToList()));
+            }
+            return new FixtureModel(fixture.FullName, folder + SafeFileName(fileName), _locations.TypeSource(type), fixtureExclusion, tests);
+        }
+
+        private CaseModel ExtractCase(TestMethod testCase, bool parameterized)
+        {
+            IReadOnlyList<EncodedValue> args;
+            string? encodingError = null;
+            try
+            {
+                args = testCase.Arguments.Select(_encoder.Encode).ToList();
+            }
+            catch (Exception e)
+            {
+                args = [];
+                encodingError = $"{e.GetType().Name}: {e.Message}";
+            }
+            var parms = NodaTimeInternals.Parms(testCase) as TestCaseParameters;
+            var hasExpected = parms is { HasExpectedResult: true };
+            return new CaseModel(
+                args,
+                encodingError,
+                hasExpected,
+                hasExpected ? _encoder.Encode(parms!.ExpectedResult) : null,
+                parameterized ? testCase.Properties.Get(PropertyNames.Description) as string : null,
+                GetRunState(testCase));
+        }
+
+        private static RunStateModel? GetRunState(Test test)
+        {
+            var reason = test.Properties.Get(PropertyNames.SkipReason) as string ?? "";
+            return test.RunState switch
+            {
+                RunState.Ignored or RunState.NotRunnable or RunState.Skipped => new RunStateModel(test.RunState, reason),
+                RunState.Explicit => new RunStateModel(RunState.Explicit, null),
+                _ => null,
+            };
+        }
+
+        private static CodeWriter WriteFixture(CodeWriter body, FixtureModel fixture)
+        {
+            var depth = fixture.Path.Count(c => c == '/');
+            var typesModule = depth == 0 ? "./types" : string.Concat(Enumerable.Repeat("../", depth)) + "types";
+            body.OpenConstObject("fixture", "ScenarioFixture", typesModule, constant: false)
+                .Property("name", body.Str(fixture.Name))
+                .Property("source", body.Str(fixture.Source));
+            if (fixture.Excluded is not null)
+                body.Property("excluded", body.Str(fixture.Excluded));
+            body.OpenBlock("tests: [");
+            foreach (var test in fixture.Tests)
+            {
+                body.OpenObjectLine("ScenarioTest")
+                    .Property("method", body.Str(test.Method))
+                    .Property("source", body.Str(test.Source));
+                if (test.Parameters.Count > 0)
+                    body.Property("parameters", body.List(test.Parameters.Select(body.Str)));
+                if (test.DeclaredIn is not null)
+                    body.Property("declaredIn", body.Str(test.DeclaredIn));
+                if (test.Excluded.Length > 0)
+                    body.Property("excluded", body.Str(test.Excluded));
+                body.Properties(new
+                {
+                    ignored = test.RunState?.Value(body, RunState.Ignored),
+                    @explicit = test.RunState?.Value(body, RunState.Explicit),
+                    notRunnable = test.RunState?.Value(body, RunState.NotRunnable),
+                    skipped = test.RunState?.Value(body, RunState.Skipped),
+                });
+                if (test.Cases is null)
                 {
                     body.Property("cases", "[]");
                 }
                 else
                 {
                     body.OpenBlock("cases: [");
-                    foreach (var testCase in testCases)
+                    foreach (var testCase in test.Cases)
                     {
-                        cases++;
-                        body.WriteLine(EncodeCase(testCase, child is ParameterizedMethodSuite) + ",");
+                        var parts = new
+                        {
+                            args = body.List(testCase.Args.Select(body.Value)),
+                            encodingError = testCase.EncodingError is null ? null : body.Str(testCase.EncodingError),
+                            expected = testCase.HasExpected ? body.Value(testCase.Expected!) : null,
+                            description = testCase.Description is null ? null : body.Str(testCase.Description),
+                            ignored = testCase.RunState?.Value(body, RunState.Ignored),
+                            @explicit = testCase.RunState?.Value(body, RunState.Explicit),
+                            notRunnable = testCase.RunState?.Value(body, RunState.NotRunnable),
+                            skipped = testCase.RunState?.Value(body, RunState.Skipped),
+                            // The Dart harness skips the case on dart2js.
+                            dart2js = body switch
+                            {
+                                TypescriptWriter => null,
+                                DartWriter => testCase.ExceedsDoublePrecision ? body.Bool(false) : null,
+                                _ => body.ThrowUnknown<string?>(),
+                            },
+                        };
+                        switch (body)
+                        {
+                            case TypescriptWriter:
+                                body.WriteLine(body.Object("ScenarioCase", parts) + ",");
+                                break;
+                            case DartWriter:
+                                body.WriteLine((testCase.IsDartConstant ? "const " : "") + body.Object("ScenarioCase", parts) + ",");
+                                break;
+                            default:
+                                body.ThrowUnknown();
+                                break;
+                        }
                     }
                     body.CloseBlock("],");
                 }
-                body.CloseBlock("},");
+                body.CloseObjectLine();
             }
-            body.CloseBlock("],")
-                .CloseBlock("};");
-            return (relativePath, body, tests, cases);
+            return body.CloseBlock("],")
+                .CloseConstObject();
         }
 
-        private string EncodeCase(TestMethod testCase, bool parameterized)
-        {
-            var parts = new List<string>();
-            string args;
-            try
-            {
-                args = "[" + string.Join(", ", testCase.Arguments.Select(_encoder.Encode)) + "]";
-            }
-            catch (Exception e)
-            {
-                args = "[]";
-                parts.Add($"encodingError: {Ts.Str($"{e.GetType().Name}: {e.Message}")}");
-            }
-            parts.Insert(0, $"args: {args}");
-            // TestMethod.Parms is internal to NUnit: see NodaTimeInternals.
-            if (NodaTimeInternals.Parms(testCase) is TestCaseParameters { HasExpectedResult: true } parms)
-                parts.Add($"expected: {_encoder.Encode(parms.ExpectedResult)}");
-            if (parameterized && testCase.Properties.Get(PropertyNames.Description) is string description)
-                parts.Add($"description: {Ts.Str(description)}");
-            if (RunStateProperty(testCase) is { } runState)
-                parts.Add(runState);
-            return "{ " + string.Join(", ", parts) + " }";
-        }
-
-        /// <summary>The run state as an object property (<c>ignored: "reason"</c>), or null if the test is runnable.</summary>
-        private static string? RunStateProperty(Test test)
-        {
-            var reason = Ts.Str(test.Properties.Get(PropertyNames.SkipReason) as string ?? "");
-            return test.RunState switch
-            {
-                RunState.Ignored => $"ignored: {reason}",
-                RunState.Explicit => "explicit: true",
-                RunState.NotRunnable => $"notRunnable: {reason}",
-                RunState.Skipped => $"skipped: {reason}",
-                _ => null,
-            };
-        }
-
-        /// <summary>
-        /// Value encoding specific to the test assembly: cultures (by identity, so NodaTime.Test's custom
-        /// cultures are distinguished from the standard ones) and well-known static instances.
-        /// </summary>
-        private string? Override(object value)
+        /// <summary>Cultures by identity (NodaTime.Test modifies some), and well-known static instances.</summary>
+        private EncodedValue? Override(object value)
         {
             if (value is CultureInfo culture)
             {
                 var key = CultureKey(culture);
                 if (!_cultures.ContainsKey(key))
                     _cultures[key] = culture;
-                return TsValueEncoder.Tag(nameof(CultureInfo), ("name", Ts.Str(culture.Name)), ("key", Ts.Str(key)));
+                return EncodedValue.Tag(nameof(CultureInfo), new { name = EncodedValue.String(culture.Name), key = EncodedValue.String(key) });
             }
             if (value is string || value.GetType().IsValueType || value.GetType().IsArray)
                 return null;
             if (value is NodaTime.Period or NodaTime.CalendarSystem or NodaTime.Calendars.Era or NodaTime.DateTimeZone or NodaTime.TimeZones.ZoneInterval or NodaTime.DateInterval)
-                return null; // encoded structurally
-            if (_statics.TryGetName(value, out var staticName))
-                return TsValueEncoder.Tag("Static", ("ref", Ts.Str(staticName)), ("type", Ts.Str(TsValueEncoder.NestedName(value.GetType()))));
+                return null;
+            if (_statics.TryGet(value, out var reference))
+                return EncodedValue.Tag("Static", new
+                {
+                    @ref = EncodedValue.String(reference.Name),
+                    type = EncodedValue.String(ValueEncoder.NestedName(value.GetType())),
+                });
             return null;
         }
 
-        /// <summary>
-        /// A stable key for a culture: "Cultures.X" for NodaTime.Test's named test cultures, the culture name for
-        /// standard cultures, and "name#hash" for cultures a test modified inline (so they don't collide with
-        /// the standard culture of the same name).
-        /// </summary>
+        /// <summary>"Cultures.X" for NodaTime.Test's test cultures, the name for standard ones, else "name#hash".</summary>
         private string CultureKey(CultureInfo culture)
         {
-            if (_statics.TryGetName(culture, out var name) && name.StartsWith("Cultures.", StringComparison.Ordinal))
-                return name;
+            if (_statics.TryGet(culture, out var reference) && reference.OuterType.Name == "Cultures")
+                return reference.Name;
             var data = CultureSerializer.Serialize(culture);
             var standard = CultureSerializer.Serialize(CultureInfo.GetCultureInfo(culture.Name));
             if (data == standard)
@@ -236,38 +329,50 @@ namespace NodaJs.Tools.Scenarios
             return $"{culture.Name}#{Convert.ToHexStringLower(hash)[..8]}";
         }
 
-        private void WriteCultures()
+        private void WriteCultures(LangTarget langTarget)
         {
-            var body = new TypescriptWriter()
-                .WriteLine("import type { CultureData } from \"../../src/noda-js/Globalization/NodaCultureInfo.ts\";", emptyLineAfter: true)
-                .DocComment("""
-                    Every culture the scenarios refer to, keyed by the `key` of their encoded value: the culture name,
-                    or "Cultures.X" for NodaTime.Test's custom test cultures (src/NodaTime.Test/Text/Cultures.cs).
-                    """)
-                .OpenBlock("export const scenarioCultures: Readonly<Record<string, CultureData>> = {");
-            foreach (var (key, culture) in _cultures)
+            const string doc = "Every culture the scenarios use, by the `key` of its encoded value.";
+            var body = langTarget.NewWriter();
+            switch (body)
             {
-                body.AppendIndent().AppendOnLine($"{Ts.Str(key)}: ");
-                CultureSerializer.Write(body, culture);
+                case TypescriptWriter:
+                    body.WriteLine("import type { CultureData } from \"../../src/noda-js/Globalization/NodaCultureInfo.ts\";", emptyLineAfter: true)
+                        .DocComment(doc)
+                        .OpenBlock("export const scenarioCultures: Readonly<Record<string, CultureData>> = {");
+                    break;
+                case DartWriter:
+                    body.WriteLine("import 'package:noda_dart/src/Globalization/NodaCultureInfo.dart';", emptyLineAfter: true)
+                        .DocComment(doc.ReplaceLineEndings(" "))
+                        .OpenBlock("final Map<String, CultureData> scenarioCultures = {");
+                    break;
+                default:
+                    body.ThrowUnknown();
+                    break;
+            }
+            foreach (var culture in _cultures)
+            {
+                body.AppendIndent().AppendOnLine($"{body.Str(culture.Key)}: ");
+                CultureSerializer.Write(body, culture.Value);
                 body.AppendOnLine(",").AppendNewline();
             }
             body.CloseBlock("};");
-            output.Write("test/scenarios/cultures.generated.ts", Command, body,
-                ["Culture data comes from ICU/CLDR via .NET (Unicode License; see NOTICE.txt), modified by NodaTime.Test where it says so."]);
+            output.Write(langTarget.Test("scenarios/cultures"), Command, body,
+                ["Source: ICU/CLDR via .NET (Unicode License; see NOTICE.txt), as NodaTime.Test modifies it."]);
         }
 
         private string? Exclusion(string name)
         {
-            foreach (var (_, rule, reason) in _exclusions)
+            foreach (var exclusion in _exclusions)
             {
+                var rule = exclusion.Rule;
                 var matches = rule.EndsWith('*') ? name.StartsWith(rule[..^1], StringComparison.Ordinal) : name == rule;
                 if (matches)
-                    return reason.Length > 0 ? reason : "excluded";
+                    return exclusion.Reason.Length > 0 ? exclusion.Reason : "excluded";
             }
             return null;
         }
 
-        private static List<(string, string, string)> LoadExclusions() =>
+        private static List<ExclusionRule> LoadExclusions() =>
             File.ReadAllLines(Path.Combine(ToolEnvironment.RepoRoot, "tools", "scenario-exclusions.txt"))
                 .Select(line => line.Trim())
                 .Where(line => line.Length > 0 && !line.StartsWith('#'))
@@ -276,7 +381,7 @@ namespace NodaJs.Tools.Scenarios
                     var hash = line.IndexOf('#');
                     var rule = (hash >= 0 ? line[..hash] : line).Trim();
                     var reason = hash >= 0 ? line[(hash + 1)..].Trim() : "";
-                    return (line, rule, reason);
+                    return new ExclusionRule(rule, reason);
                 })
                 .ToList();
 
@@ -307,13 +412,12 @@ namespace NodaJs.Tools.Scenarios
         }
     }
 
-    /// <summary>
-    /// Names for well-known static instances (e.g. "Resolvers.StrictResolver", "LocalDatePattern.Iso",
-    /// "Cultures.GenitiveNameTestCulture"), found by reflecting over static fields and properties.
-    /// </summary>
+    /// <summary>Names of static instances ("Resolvers.StrictResolver", "Cultures.GenitiveNameTestCulture").</summary>
     internal sealed class StaticReferences
     {
-        private readonly Dictionary<object, string> _names = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<object, StaticReference> _references = new(ReferenceEqualityComparer.Instance);
+
+        private sealed record StaticMember(string Name, Func<object?> Get);
 
         public StaticReferences(IEnumerable<Assembly> assemblies)
         {
@@ -323,16 +427,16 @@ namespace NodaJs.Tools.Scenarios
                 {
                     var members = type.GetFields(flags)
                         .Where(f => !f.IsLiteral && !f.Name.Contains('<'))
-                        .Select(f => (f.Name, Get: (Func<object?>) (() => f.GetValue(null))))
+                        .Select(f => new StaticMember(f.Name, () => f.GetValue(null)))
                         .Concat(type.GetProperties(flags)
                             .Where(p => p.GetMethod is not null && p.GetIndexParameters().Length == 0)
-                            .Select(p => (p.Name, Get: (Func<object?>) (() => p.GetValue(null)))));
-                    foreach (var (name, get) in members)
+                            .Select(p => new StaticMember(p.Name, () => p.GetValue(null))));
+                    foreach (var member in members)
                     {
                         object? value;
                         try
                         {
-                            value = get();
+                            value = member.Get();
                         }
                         catch
                         {
@@ -340,18 +444,35 @@ namespace NodaJs.Tools.Scenarios
                         }
                         if (value is null || value is string || value.GetType().IsValueType)
                             continue;
-                        // First name wins; public NodaTime members are visited before test members.
-                        _names.TryAdd(value, $"{TsValueEncoder.NestedName(type)}.{name}");
+                        // First name wins: NodaTime's before the tests'.
+                        _references.TryAdd(value, new StaticReference(type, member.Name));
                     }
                 }
         }
 
-        public bool TryGetName(object value, out string name) => _names.TryGetValue(value, out name!);
+        public bool TryGet(object value, out StaticReference reference) => _references.TryGetValue(value, out reference!);
     }
 
-    /// <summary>
-    /// Source file and line of test methods, from the test assemblies' portable PDBs.
-    /// </summary>
+    /// <summary>A static field or property holding an instance.</summary>
+    internal sealed record StaticReference(Type Type, string Member)
+    {
+        /// <summary>"Resolvers.StrictResolver".</summary>
+        public string Name => $"{ValueEncoder.NestedName(Type)}.{Member}";
+
+        /// <summary>The outermost type declaring the member.</summary>
+        public Type OuterType
+        {
+            get
+            {
+                var type = Type;
+                while (type.DeclaringType is not null)
+                    type = type.DeclaringType;
+                return type;
+            }
+        }
+    }
+
+    /// <summary>Test methods' source file and line, from the PDBs.</summary>
     internal sealed class SourceLocations
     {
         private readonly Dictionary<Assembly, MetadataReader> _readers = [];
@@ -367,16 +488,22 @@ namespace NodaJs.Tools.Scenarios
             }
         }
 
-        public string MethodSource(MethodInfo method)
+        private sealed record SourceLocation(string File, int Line);
+
+        /// <summary>"path:line", or "" without a PDB.</summary>
+        public string MethodSource(MethodInfo method) =>
+            Location(method) is { } location ? $"{location.File}:{location.Line}" : "";
+
+        private SourceLocation? Location(MethodInfo method)
         {
             if (!_readers.TryGetValue(method.Module.Assembly, out var reader))
-                return "";
+                return null;
             var handle = MetadataTokens.MethodDefinitionHandle(method.MetadataToken);
             var info = reader.GetMethodDebugInformation(handle);
             foreach (var point in info.GetSequencePoints())
                 if (!point.IsHidden)
-                    return $"{Relative(reader.GetString(reader.GetDocument(point.Document).Name))}:{point.StartLine}";
-            return "";
+                    return new SourceLocation(Relative(reader.GetString(reader.GetDocument(point.Document).Name)), point.StartLine);
+            return null;
         }
 
         public string TypeSource(Type type)
@@ -385,9 +512,9 @@ namespace NodaJs.Tools.Scenarios
             var files = type.GetMethods(flags)
                 .Concat<MethodBase>(type.GetConstructors(flags))
                 .OfType<MethodInfo>()
-                .Select(MethodSource)
-                .Where(s => s.Length > 0)
-                .Select(s => s[..s.LastIndexOf(':')])
+                .Select(Location)
+                .OfType<SourceLocation>()
+                .Select(l => l.File)
                 .Distinct()
                 .Order(StringComparer.Ordinal)
                 .ToList();

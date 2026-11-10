@@ -1,0 +1,25 @@
+name: system_source_test_app
+description: "Runs the SystemDateTimeZoneSource checks on every Flutter platform."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  noda_dart:
+    path: ../../noda_dart
+  system_source_checks:
+    path: ../system_source_checks
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

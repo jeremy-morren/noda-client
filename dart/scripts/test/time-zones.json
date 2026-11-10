@@ -1,0 +1,51 @@
+{
+  "$comment": [
+    "Zones dart/scripts/test/test-time-zones.ts runs the system tests in, per OS. tz: Windows ID for tzutil; dstOff: DST adjustment off. standardName/daylightName: localized names. setup: shell command configuring /etc/localtime. envTz: TZ (\"\" = empty).",
+    "expected: the tzdb provider's system default. system: the system source's default when not tz, envTz or (with setup) expected. offsetMayDiffer: why the UTC offset may differ. exclude: regex of test names that fail here for reasons outside noda_dart."
+  ],
+  "windows": [
+    { "name": "UTC", "tz": "UTC", "expected": "Etc/UTC" },
+    { "name": "AUS Eastern", "tz": "AUS Eastern Standard Time", "expected": "Australia/Sydney" },
+    { "name": "India", "tz": "India Standard Time", "expected": "Asia/Calcutta" },
+    { "name": "Nepal", "tz": "Nepal Standard Time", "expected": "Asia/Katmandu" },
+    { "name": "Russia TZ 3", "tz": "Russia Time Zone 3", "expected": "Europe/Samara" },
+    {
+      "name": "Lord Howe", "tz": "Lord Howe Standard Time", "expected": "Australia/Lord_Howe",
+      "exclude": ".*system default zone matches.*",
+      "$comment": "Dart's DateTime can't represent a 30-minute DST shift (it reports +10:30; Windows and noda_dart have +11)."
+    },
+    { "name": "Chatham", "tz": "Chatham Islands Standard Time", "expected": "Pacific/Chatham" },
+    { "name": "Line Islands", "tz": "Line Islands Standard Time", "expected": "Pacific/Kiritimati" },
+    { "name": "Dateline", "tz": "Dateline Standard Time", "expected": "Etc/GMT+12" },
+    {
+      "name": "Morocco", "tz": "Morocco Standard Time", "expected": "Africa/Casablanca",
+      "exclude": ".*TZ not set: the host zone",
+      "$comment": "TZDB 2026f moves Morocco to UTC+0 from 2026-09-20; Windows' data on the runners predates it, so the tzdb and system providers' offsets for the host zone differ in parts of the year."
+    },
+    {
+      "name": "Pacific DST off", "tz": "Pacific Standard Time", "dstOff": true,
+      "expected": "America/Los_Angeles", "exclude": ".*system default zone matches.*",
+      "offsetMayDiffer": "DST adjustment off: Windows ignores the zone's DST rules, so its offset stays -8 all year"
+    },
+    { "name": "TZ IANA", "tz": "UTC", "envTz": "Asia/Kolkata", "system": "India Standard Time", "expected": "Asia/Kolkata" },
+    { "name": "TZ Windows ID", "tz": "UTC", "envTz": "Tokyo Standard Time", "expected": "Asia/Tokyo" },
+    {
+      "name": "German", "tz": "W. Europe Standard Time", "expected": "Europe/Berlin",
+      "standardName": "Mitteleuropäische Zeit", "daylightName": "Mitteleuropäische Sommerzeit"
+    },
+    {
+      "name": "Japanese", "tz": "Tokyo Standard Time", "expected": "Asia/Tokyo",
+      "standardName": "東京 (標準時)", "daylightName": "東京 (夏時間)"
+    }
+  ],
+  "linux": [
+    { "name": "localtime symlink", "setup": "sudo ln -sf /usr/share/zoneinfo/Australia/Sydney /etc/localtime", "expected": "Australia/Sydney" },
+    { "name": "localtime copy", "setup": "sudo rm -f /etc/localtime && sudo cp /usr/share/zoneinfo/America/New_York /etc/localtime", "expected": "America/New_York" },
+    { "name": "TZ", "envTz": "Asia/Kolkata", "expected": "Asia/Kolkata" },
+    { "name": "TZ colon", "envTz": ":Europe/London", "system": "Europe/London", "expected": "Europe/London" },
+    { "name": "TZ empty", "envTz": "", "system": "Etc/UTC", "expected": "Etc/UTC" }
+  ],
+  "macos": [
+    { "name": "localtime symlink", "setup": "sudo ln -sf /var/db/timezone/zoneinfo/Australia/Sydney /etc/localtime", "expected": "Australia/Sydney" }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "name": "noda-js",
+  "version": "0.0.0-development",
+  "description": "A TypeScript port of NodaTime: the same API, names and wire formats.",
+  "keywords": [
+    "nodatime",
+    "noda-time",
+    "date",
+    "time",
+    "datetime",
+    "timezone",
+    "tzdb",
+    "iana",
+    "duration",
+    "period",
+    "instant",
+    "calendar",
+    "linq",
+    "linq-to-typescript"
+  ],
+  "homepage": "https://github.com/jeremy-morren/noda-client#readme",
+  "bugs": {
+    "url": "https://github.com/jeremy-morren/noda-client/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremy-morren/noda-client.git",
+    "directory": "src/noda-js"
+  },
+  "license": "Apache-2.0",
+  "author": "Jeremy Morren",
+  "type": "module",
+  "sideEffects": [
+    "./dist/internal.js",
+    "./internal.ts",
+    "./dist/Cultures/all.generated.js",
+    "./Cultures/all.generated.ts",
+    "./dist/entries/calendars/*.js",
+    "./entries/calendars/*.ts"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tzdb": {
+      "types": "./dist/entries/tzdb.d.ts",
+      "default": "./dist/entries/tzdb.js"
+    },
+    "./tzdb/bundled": {
+      "types": "./dist/entries/tzdb-bundled.d.ts",
+      "default": "./dist/entries/tzdb-bundled.js"
+    },
+    "./tzdb/compiler": {
+      "types": "./dist/entries/tzdb-compiler.d.ts",
+      "default": "./dist/entries/tzdb-compiler.js"
+    },
+    "./system": {
+      "types": "./dist/entries/system.d.ts",
+      "default": "./dist/entries/system.js"
+    },
+    "./testing": {
+      "types": "./dist/entries/testing.d.ts",
+      "default": "./dist/entries/testing.js"
+    },
+    "./cultures": {
+      "types": "./dist/Cultures/index.generated.d.ts",
+      "default": "./dist/Cultures/index.generated.js"
+    },
+    "./cultures/all": {
+      "types": "./dist/Cultures/all.generated.d.ts",
+      "default": "./dist/Cultures/all.generated.js"
+    },
+    "./calendars/all": {
+      "types": "./dist/entries/calendars/all.d.ts",
+      "default": "./dist/entries/calendars/all.js"
+    },
+    "./calendars/hebrew": {
+      "types": "./dist/entries/calendars/hebrew.d.ts",
+      "default": "./dist/entries/calendars/hebrew.js"
+    },
+    "./calendars/islamic": {
+      "types": "./dist/entries/calendars/islamic.d.ts",
+      "default": "./dist/entries/calendars/islamic.js"
+    },
+    "./calendars/persian": {
+      "types": "./dist/entries/calendars/persian.d.ts",
+      "default": "./dist/entries/calendars/persian.js"
+    },
+    "./calendars/umalqura": {
+      "types": "./dist/entries/calendars/umalqura.d.ts",
+      "default": "./dist/entries/calendars/umalqura.js"
+    },
+    "./calendars/badi": {
+      "types": "./dist/entries/calendars/badi.d.ts",
+      "default": "./dist/entries/calendars/badi.js"
+    },
+    "./windows": {
+      "types": "./dist/entries/windows.d.ts",
+      "default": "./dist/entries/windows.js"
+    },
+    "./linq": {
+      "types": "./dist/entries/linq.d.ts",
+      "default": "./dist/entries/linq.js"
+    }
+  },
+  "files": [
+    "dist",
+    "**/*.ts",
+    "!dist/**/*.tsbuildinfo",
+    "CHANGELOG.md",
+    "LICENSE.txt",
+    "NOTICE.txt"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "node ../../scripts/build/clean.ts ts/src/noda-js/dist && tsc -b",
+    "prepack": "node -e \"for (const f of ['LICENSE.txt', 'NOTICE.txt']) require('fs').copyFileSync('../../../' + f, f)\"",
+    "check:package": "publint --strict && attw --pack . --profile esm-only"
+  },
+  "dependencies": {
+    "long": "^5.3.2"
+  }
+}

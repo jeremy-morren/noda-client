@@ -1,26 +1,37 @@
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace NodaJs.Tools.Common;
 
-/// <summary>
-/// A doc comment converted to JSDoc text, and the types its <c>{@link}</c>s refer to (which the generated file must
-/// import for the links to resolve).
-/// </summary>
-public sealed record DocComment(string Text, IReadOnlySet<Type> LinkedTypes);
+/// <summary>Part of a doc comment line, which each <see cref="CodeWriter"/> renders its way.</summary>
+public abstract record DocPart;
 
-/// <summary>
-/// Reads the XML documentation file built alongside an assembly, so generated code can keep
-/// NodaTime's doc comments.
-/// </summary>
+public sealed record TextPart(string Text) : DocPart;
+
+/// <summary><c>&lt;c&gt;</c> or a <c>langword</c>.</summary>
+public sealed record CodePart(string Code) : DocPart;
+
+/// <summary>A link to <paramref name="Target"/> ("Duration.FromDays").</summary>
+public sealed record LinkPart(string Target) : DocPart;
+
+/// <summary>A member exported from a calendar entry point instead (e.g. "HebrewCivil" from "hebrew"): named, not linked.</summary>
+public sealed record MovedPart(string Member, string Module) : DocPart;
+
+/// <summary>Doc comment lines (none blank), and the linked types (a TS file imports them).</summary>
+public sealed record DocComment(IReadOnlyList<IReadOnlyList<DocPart>> Lines, IReadOnlySet<Type> LinkedTypes)
+{
+    public static readonly DocComment Empty = new([], new HashSet<Type>());
+
+    public DocComment AppendLine(string text) => this with { Lines = [.. Lines, [new TextPart(text)]] };
+}
+
+/// <summary>An assembly's XML doc comments.</summary>
 public sealed partial class DocComments
 {
     private readonly Dictionary<string, XElement> _members = new(StringComparer.Ordinal);
 
-    // The assembly's types by their doc comment name ("NodaTime.TimeZones.ZoneEqualityComparer.Options"), to resolve
-    // crefs, where '.' separates both namespaces and nested types.
+    // By doc comment name, where '.' also separates nested types.
     private readonly Dictionary<string, Type> _types;
 
     public DocComments(Assembly assembly)
@@ -37,9 +48,9 @@ public sealed partial class DocComments
 
     public DocComment? Summary(FieldInfo field) => Summary("F:" + XmlName(field.DeclaringType!) + "." + field.Name);
 
-    /// <summary>The TS name of a (possibly nested) type: "ZoneEqualityComparer+Options" → "ZoneEqualityComparerOptions".</summary>
-    public static string TsTypeName(Type type) =>
-        (type.DeclaringType is null ? "" : TsTypeName(type.DeclaringType)) +
+    /// <summary>"ZoneEqualityComparer+Options" → "ZoneEqualityComparerOptions" (the ports have no nested types).</summary>
+    public static string FlatTypeName(Type type) =>
+        (type.DeclaringType is null ? "" : FlatTypeName(type.DeclaringType)) +
         (type.Name.Contains('`') ? type.Name[..type.Name.IndexOf('`')] : type.Name);
 
     private DocComment? Summary(string id)
@@ -47,57 +58,87 @@ public sealed partial class DocComments
         if (!_members.TryGetValue(id, out var member))
             return null;
         var links = new HashSet<Type>();
-        var summary = member.Element("summary");
-        var remarks = member.Element("remarks");
-        var text = new StringBuilder(summary is null ? "" : ToText(summary, links));
-        if (remarks is not null)
-            text.Append('\n').Append(ToText(remarks, links));
-        return new DocComment(text.ToString().Trim(), links);
+        var lines = new LineBuilder();
+        if (member.Element("summary") is { } summary)
+            AddParts(summary, lines, links);
+        if (member.Element("remarks") is { } remarks)
+        {
+            lines.Break();
+            AddParts(remarks, lines, links);
+        }
+        return new DocComment(lines.Lines(), links);
     }
 
     private static string XmlName(Type type) => type.FullName!.Replace('+', '.');
 
-    private string ToText(XElement element, HashSet<Type> links)
+    private void AddParts(XElement element, LineBuilder lines, HashSet<Type> links)
     {
-        var builder = new StringBuilder();
         foreach (var node in element.Nodes())
             switch (node)
             {
                 case XText text:
-                    builder.Append(WhitespaceRegex().Replace(text.Value, " "));
+                    lines.Text(WhitespaceRegex().Replace(text.Value, " "));
                     break;
                 case XElement e when e.Name == "see" || e.Name == "seealso":
                     var cref = (string?) e.Attribute("cref");
                     var langword = (string?) e.Attribute("langword");
                     if (cref is not null && MovedMember(cref) is { } moved)
-                        builder.Append(moved);
+                        lines.Add(moved);
                     else if (cref is not null)
-                        builder.Append("{@link ").Append(CrefToTs(cref, links)).Append('}');
+                        lines.Add(new LinkPart(CrefToTs(cref, links)));
                     else if (langword is not null)
-                        builder.Append('`').Append(langword).Append('`');
+                        lines.Add(new CodePart(langword));
                     break;
                 case XElement e when e.Name == "c":
-                    builder.Append('`').Append(e.Value).Append('`');
+                    lines.Add(new CodePart(e.Value));
                     break;
                 case XElement e when e.Name == "paramref" || e.Name == "typeparamref":
-                    builder.Append((string?) e.Attribute("name"));
+                    lines.Text((string?) e.Attribute("name") ?? "");
                     break;
                 case XElement e when e.Name == "para":
-                    builder.Append('\n').Append(ToText(e, links)).Append('\n');
+                    lines.Break();
+                    AddParts(e, lines, links);
+                    lines.Break();
                     break;
                 case XElement e:
-                    builder.Append(ToText(e, links));
+                    AddParts(e, lines, links);
                     break;
             }
-        return builder.ToString();
     }
 
-    /// <summary>
-    /// "M:NodaTime.Duration.FromDays(System.Int32)" → "Duration.FromDays";
-    /// "F:NodaTime.TimeZones.ZoneEqualityComparer.Options.MatchAllTransitions" → "ZoneEqualityComparerOptions.MatchAllTransitions".
-    /// The type part is the longest prefix naming a type in the assembly, written with its TS name (no namespace,
-    /// nested types concatenated), and is added to <paramref name="links"/>.
-    /// </summary>
+    /// <summary>Doc parts by line: adjacent text joined, lines trimmed, blank lines left out.</summary>
+    private sealed class LineBuilder
+    {
+        private readonly List<List<DocPart>> _lines = [[]];
+
+        public void Text(string text)
+        {
+            var line = _lines[^1];
+            if (line is [.., TextPart last])
+                line[^1] = new TextPart(last.Text + text);
+            else
+                line.Add(new TextPart(text));
+        }
+
+        public void Add(DocPart part) => _lines[^1].Add(part);
+
+        public void Break() => _lines.Add([]);
+
+        public IReadOnlyList<IReadOnlyList<DocPart>> Lines() =>
+            _lines.Select(Trim).Where(l => l.Count > 0).ToList();
+
+        private static IReadOnlyList<DocPart> Trim(List<DocPart> line)
+        {
+            var parts = line.ToList();
+            if (parts is [TextPart first, ..])
+                parts[0] = new TextPart(first.Text.TrimStart());
+            if (parts is [.., TextPart last])
+                parts[^1] = new TextPart(last.Text.TrimEnd());
+            return parts.Where(p => p is not TextPart { Text: "" }).ToList();
+        }
+    }
+
+    /// <summary>"M:NodaTime.Duration.FromDays(System.Int32)" → "Duration.FromDays"; adds the type to <paramref name="links"/>.</summary>
     private string CrefToTs(string cref, HashSet<Type> links)
     {
         var name = cref[2..];
@@ -110,14 +151,13 @@ public sealed partial class DocComments
             if (!_types.TryGetValue(string.Join('.', parts[..typeParts]), out var type))
                 continue;
             links.Add(type);
-            return string.Join('.', [TsTypeName(type), .. parts[typeParts..]]);
+            return string.Join('.', [FlatTypeName(type), .. parts[typeParts..]]);
         }
-        // Not one of the assembly's types (e.g. System.ArgumentException): drop the root namespaces.
+        // Not the assembly's (e.g. System.ArgumentException).
         return string.Join('.', parts.Where(p => p is not ("NodaTime" or "System")));
     }
 
-    // CalendarSystem members that noda-js exports from the calendar entry points instead (noda-js/calendars/<name>), so
-    // that bundles only contain the calendars an app imports: the docs name them in code rather than linking to them.
+    // Exported from noda-js/calendars/<name> instead (so bundles hold only imported calendars): named, not linked.
     private static readonly Dictionary<string, string> MovedMembers = new()
     {
         ["NodaTime.CalendarSystem.HebrewCivil"] = "hebrew",
@@ -132,15 +172,14 @@ public sealed partial class DocComments
         ["NodaTime.CalendarSystem.Badi"] = "badi",
     };
 
-    /// <summary>For a cref to a <see cref="MovedMembers">moved member</see>: <c>`Member` (noda-js/calendars/name)</c>.</summary>
-    private static string? MovedMember(string cref)
+    private static MovedPart? MovedMember(string cref)
     {
         var name = cref[2..];
         var paren = name.IndexOf('(');
         if (paren >= 0)
             name = name[..paren];
         return MovedMembers.TryGetValue(name, out var entry)
-            ? $"`{name[(name.LastIndexOf('.') + 1)..]}` (noda-js/calendars/{entry})"
+            ? new MovedPart(name[(name.LastIndexOf('.') + 1)..], entry)
             : null;
     }
 

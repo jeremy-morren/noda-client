@@ -7,17 +7,9 @@ using NodaTime.TimeZones;
 namespace NodaJs.Tools.SystemZones;
 
 /// <summary>
-/// The <c>system-zones</c> command: what NodaTime's BclDateTimeZoneSource (DateTimeZoneProviders.Bcl) sees on this
-/// machine, as JSON, so test/system/ can compare noda-js's system source (noda-js/system) with it exactly. On Windows
-/// that's the registry's time zones, as .NET's TimeZoneInfo reads them. Written by scripts/export-system-zones.ps1 to
-/// test-results/system-zones.json (it's machine-specific, so it isn't committed).
+/// <c>system-zones</c>: BclDateTimeZoneSource on this machine as JSON, for test/system/ to compare with. Rules are
+/// included so a difference can be traced to them or to the conversion.
 /// </summary>
-/// <remarks>
-/// For each zone: TimeZoneInfo's names, base offset and adjustment rules (so a difference can be traced to the rules or
-/// to the conversion), and BclDateTimeZone's zone intervals over [<see cref="StartYear"/>, <see cref="EndYear"/>).
-/// Instants are milliseconds since the Unix epoch (Windows' data has millisecond precision; the export checks there's
-/// nothing finer), null for the start or end of time.
-/// </remarks>
 internal static class SystemZonesExport
 {
     public const int StartYear = 1800;
@@ -37,7 +29,6 @@ internal static class SystemZonesExport
             zones.Add(DescribeZone(zone, start, end));
         }
 
-        // .NET 6+ also accepts IANA IDs on Windows (converted with ICU's copy of CLDR's windowsZones).
         var ianaToWindows = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (var ianaId in TzdbDateTimeZoneSource.Default.GetIds())
         {
@@ -96,7 +87,7 @@ internal static class SystemZonesExport
         end = DescribeTransition(rule.DaylightTransitionEnd),
     };
 
-    // [fixed (1) or floating (0), month, week, day, day of week, time of day (milliseconds)]
+    // [fixed (1) or floating (0), month, week, day, day of week, time of day (ms)]
     private static int[] DescribeTransition(TimeZoneInfo.TransitionTime transition) =>
     [
         transition.IsFixedDateRule ? 1 : 0,

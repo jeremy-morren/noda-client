@@ -22,6 +22,9 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# noda-js: the release scripts.
+!scripts/release/
+!ts/scripts/release/
 
 [Dd]ebug/x64/
 [Dd]ebugPublic/x64/
@@ -434,11 +437,20 @@ dist/
 .nodatime/
 coverage/
 test-results/
+# NodaTime's view of this machine's time zones (NodaJs.Tools system-zones), for both ports' system tests.
+testdata/system-zones.json
 # Licence copies made by each package's prepack (the originals are at the repo root)
-src/*/LICENSE.txt
-src/*/NOTICE.txt
+ts/src/*/LICENSE.txt
+ts/src/*/NOTICE.txt
 # JetBrains Rider
 .idea/
-# noda-js: the Windows native addon (native/windows, scripts/build-native.ps1).
-native/windows/build/
-src/noda-js-win32-*/time-zones.node
+# noda-js: the Windows native addon (ts/native/windows, ts/scripts/native/build-native.ts).
+ts/native/windows/build/
+ts/src/noda-js-win32-*/time-zones.node
+# The Flutter test app's debug build files (the Visual Studio rules above ignore every Debug/ folder): its debug
+# AndroidManifest.xml grants the INTERNET permission flutter test needs to reach the app's VM service.
+!dart/test_apps/system_source_flutter/android/app/src/debug/
+# noda_dart: Dart tooling output. A package doesn't commit its pubspec.lock.
+.dart_tool/
+dart/**/pubspec.lock
+dart/**/build/

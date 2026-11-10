@@ -1,0 +1,29 @@
+# API differences: text infrastructure (Text/, Text/Patterns/) and globalization (Globalization/)
+
+| C# (NodaTime / .NET) | Dart (noda_dart) | Why |
+|---|---|---|
+| `ParseResult<T>.ForValue(value)`, `ParseResult<T>.ForException(provider)` and the internal factories (`ParseResult<T>.MismatchedNumber(...)` etc.) | `ParseResult.ForValue<T>(value)`, `ParseResult.ForException<T>(provider)`, `ParseResult.MismatchedNumber<T>(...)` | Dart static members can't use the class's type parameter: generic static methods, as in noda-js. |
+| `ParseResult<T>.ValueStringEmpty` (static property) | `ParseResult.ValueStringEmpty<T>()` | Dart has no generic getters. |
+| `ParseResult<T>.Exception` (`Exception`) | `Object get Exception` | Dart errors (`ArgumentError` for `ArgumentNullException`) aren't `Exception`s. |
+| `ParseResult<T>.TryGetValue(T failureValue, out T result)` | `(bool, T) TryGetValue(T failureValue)` | `out` parameter → record. |
+| `ParseResult<T>.FieldValueOutOfRange(cursor, int, char)` / `(cursor, long, char)` | `ParseResult.FieldValueOutOfRange<T>(cursor, int value, String field)` | `int` and `long` are both `int`. |
+| `typeof(T)` / `Type` in error messages | `ParseResult.TypeName(Type)` (internal) | C# full names ("NodaTime.LocalDate"); Dart's are minified on dart2js. |
+| `UnparsableValueException(string message, string value, int index[, Exception innerException])` | `UnparsableValueException(message, value, index, [innerException])` | The constructor C# code uses is the unnamed one. `Value`/`Index` are also Dart's `FormatException.source`/`offset`. |
+| `UnparsableValueException()`, `(string message)`, `(string message, Exception innerException)` (obsolete) | `@Deprecated UnparsableValueException.MessageInnerException([message, innerException])` | Prefix chain → one named constructor. `InnerException` is a field (Dart exceptions have no inner exception). |
+| `InvalidPatternException()` / `(string message)` | `InvalidPatternException([String? message])` | Prefix chain. |
+| `IPattern<T>.AppendFormat(T, StringBuilder)` | `StringBuffer AppendFormat(T value, StringBuffer builder)` | `StringBuilder` → `StringBuffer`. |
+| `CompositePatternBuilder<T> : IEnumerable<IPattern<T>>` | `extends Iterable<IPattern<T>>` (`iterator`) | Dart's `Iterable`; collection initializers become `..Add(pattern, predicate)` cascades. |
+| `ValueCursor.Match(char)` / `Match(string)` | `Match(String)` | A C# `char` is a `String` of length 1; one method covers both. |
+| `ValueCursor.ParseInt64<T>(out long)`, `ParseInt64Digits(int, int, out long)`, `ParseDigits(int, int, out int)`, `ParseFraction(int, int, out int, int)` | Return `(ParseResult<T>?, int)` / `(bool, int)`; `ParseFraction(maximumDigits, scale, minimumDigits)` | `out` parameters → records. |
+| `SteppedPatternBuilder.AddLiteral(char, Func<ValueCursor, char, ParseResult>)` | `AddLiteralChar(String, ParseResult<TResult> Function(ValueCursor, String))` | Would only differ from `AddLiteral(string, Func<ValueCursor, ParseResult>)` by the function type. |
+| `SteppedPatternBuilder.AddParseLongestTextAction(..., textValues)` / `(..., textValues1, textValues2)` | `AddParseLongestTextAction(field, setter, compareInfo, textValues1, [textValues2])` | Prefix chain. |
+| `SteppedPatternBuilder.AddFormatAction(Action<TResult, StringBuilder>)`, with the post-parse action found from the delegate's `Target` | `AddFormatAction(action, [SteppedPatternBuilderIPostPatternParseFormatAction<TResult>? target])` | Dart closures don't expose their receiver; `DatePatternHelper` passes its `MonthFormatActionHolder` as the target. |
+| Nested `SteppedPatternBuilder<,>.ParseAction`, `.IPostPatternParseFormatAction` | `SteppedPatternBuilderParseAction<TResult, TBucket>` (typedef), `SteppedPatternBuilderIPostPatternParseFormatAction<TResult>`; also `SteppedPatternBuilderFormatAction<TResult>` for `Action<TResult, StringBuilder>` | Dart has no nested types. |
+| `PatternFieldsExtensions` (in `PatternFields.cs`) | `Text/Patterns/PatternFields.dart`: `extension PatternFieldsExtensions on PatternFields`, re-exporting the generated `PatternFields.generated.dart` | The enum is generated. |
+| `NodaFormatInfo.GetInstance(null)` | The invariant culture's format info | As noda-js (NodaTime: the current culture). `CurrentInfo` is ported. |
+| `NodaFormatInfo`'s eager initialization of every pattern parser (`initializeEagerly`) | Only the month and day name lists are eager; pattern parsers are created on first use | As noda-js: keeps unused pattern types out of compiled programs. |
+| `CultureInfo` | `NodaCultureInfo` (`Name`, `DateTimeFormat`, `CompareInfo`, `IsReadOnly` (always true), `InvariantCulture`, `CurrentCulture`, `FromData`, `Register`, `GetPatternResource`) | Generated culture data, as noda-js. `CurrentCulture`: the registered culture matching the host's language, else `StateError`. |
+| `DateTimeFormatInfo` | `DateTimeFormatInfo` (the members NodaTime reads; `GetEraName`, `GetAbbreviatedEraName`, `InvariantInfo`), from `DateTimeFormatData`; `Calendar` is the .NET calendar's type name | As noda-js. `CopyWith` replaces .NET's clone-and-modify. |
+| `CompareInfo.Compare(string, string, CompareOptions)` / `Compare(string, int, int, string, int, int, CompareOptions)` | `Compare(string1, string2, [options])` / `CompareSubstrings(string1, offset1, length1, string2, offset2, length2, [options])`, plus `IsPrefix` | Overloads. No collation library: `IgnoreCase` folds case (Turkish i included), matching .NET on the golden data; other options are ordinal. |
+| `IFormatProvider` | `abstract interface class IFormatProvider`, implemented by `NodaCultureInfo` and `DateTimeFormatInfo` | As noda-js's union type. |
+| `TypeConverterBase<T>`, `TypeConverterSettings`, `TypeConverters` (Text/) | Not ported | `TypeConverter` is .NET component-model plumbing (see the porting conventions). |
