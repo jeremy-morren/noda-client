@@ -6,7 +6,7 @@ const { version } = program
   .description("Fails if HEAD is tagged with another release version.")
   .requiredOption("--version <version>", "the version HEAD is released as", checkVersion)
   .parse().opts<{ version: string }>();
-const tag = await git().tag();
+const tag = await git().tag(["--points-at", "HEAD"]);
 
 const others = tag.split("\n")
   .filter(tag => semver.valid(tag) && semver.clean(tag) !== version);

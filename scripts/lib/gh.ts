@@ -12,9 +12,9 @@ export function releases(): { tagName: string; isDraft: boolean }[] {
   return JSON.parse(gh("release", "list", "--limit", "1000", "--json", "tagName,isDraft"));
 }
 
-/** Deletes a release and its tag. */
+/** Deletes a release, not its tag (a draft's tag usually doesn't exist; deleteTag removes one that does). */
 export function deleteRelease(tag: string): void {
-  gh("release", "delete", tag, "--cleanup-tag", "--yes");
+  gh("release", "delete", tag, "--yes");
 }
 
 /** Whether the tag exists on GitHub. */
