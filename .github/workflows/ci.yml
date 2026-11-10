@@ -216,7 +216,7 @@ jobs:
           emulator-options: -no-snapshot-save ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true
           working-directory: ts
-          script: npm run test:android
+          script: npm run test:android -- --stop-emulator
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
@@ -557,7 +557,7 @@ jobs:
           emulator-options: -no-snapshot-save ${{ env.EMULATOR_OPTIONS }}
           disable-animations: true
           working-directory: dart/test_apps/system_source_flutter
-          script: node "$GITHUB_WORKSPACE/dart/scripts/flutter/android.ts" --expected ${{ env.TIME_ZONE }}
+          script: node "$GITHUB_WORKSPACE/dart/scripts/flutter/android.ts" --expected ${{ env.TIME_ZONE }} --stop-emulator
       - uses: actions/upload-artifact@v7
         if: ${{ failure() }}
         with:

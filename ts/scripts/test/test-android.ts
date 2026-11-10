@@ -1,14 +1,16 @@
 // Runs the android-chrome test project in Chrome on the connected Android emulator or device, through Appium
 // (with its UiAutomator2 driver, on PATH), labelled with the Android version, ABI and Chrome version.
-// Usage: npm run test:android [-- <port>]   (default 23400: Vitest's browser server, forwarded with adb reverse)
+// Usage: npm run test:android [-- <port>] [--stop-emulator]   (default 23400: Vitest's browser server, forwarded with adb reverse)
 import { mkdirSync } from "node:fs";
-import { AbortError, capture, fail, pRetry, program, resolvePath, run, runScript, start } from "noda-scripts/ci";
+import { AbortError, capture, fail, pRetry, program, resolvePath, run, runScript, start, stopAndroidEmulator } from "noda-scripts/ci";
 
 program
   .description("Runs the android-chrome tests on the connected Android device.")
   .argument("[port]", "Vitest's browser server port", "23400")
+  .option("--stop-emulator", "stop the emulator (emulator-5554) afterwards (CI)")
   .parse();
 const [port] = program.processedArgs as [string];
+const { stopEmulator } = program.opts<{ stopEmulator?: boolean }>();
 
 /** Runs adb shell and returns its trimmed output. */
 function adbShell(...args: string[]): string {
@@ -44,4 +46,5 @@ try {
 } finally {
   appium.kill();
   run("adb", ["reverse", "--remove-all"], { check: false });
+  if (stopEmulator) await stopAndroidEmulator("emulator-5554");
 }

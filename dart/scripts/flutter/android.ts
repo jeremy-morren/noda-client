@@ -1,16 +1,17 @@
 // Runs the Flutter app's system time zone checks on a booted Android emulator, with a time limit per attempt (a hang is
 // retried once; a test failure isn't), writing test-results/flutter-android@Android-API-<level>-<abi>.json and the
 // device log to test-results/logcat.txt.
-// Usage: node dart/scripts/flutter/android.ts --expected America/New_York [--device emulator-5554] [--minutes 15]
-import { capture, core, pRetry, program, run, start, writeFile } from "noda-scripts/ci";
+// Usage: node dart/scripts/flutter/android.ts --expected America/New_York [--device emulator-5554] [--minutes 15] [--stop-emulator]
+import { capture, core, pRetry, program, run, start, stopAndroidEmulator, writeFile } from "noda-scripts/ci";
 import { app, testArgs } from "./app.ts";
 
-const { device, minutes, expected } = program
+const { device, minutes, expected, stopEmulator } = program
   .description("Runs the Flutter app's system time zone checks on an Android emulator, retrying a hang once.")
   .requiredOption("--expected <id>", "the emulator's zone (IANA ID)")
   .option("--device <id>", "the emulator's adb device id", "emulator-5554")
   .option("--minutes <n>", "the time limit per attempt", Number, 15)
-  .parse().opts<{ device: string; minutes: number; expected: string }>();
+  .option("--stop-emulator", "stop the emulator afterwards (CI)")
+  .parse().opts<{ device: string; minutes: number; expected: string; stopEmulator?: boolean }>();
 
 /** A system property of the device. */
 function getprop(name: string): string {
@@ -44,4 +45,5 @@ try {
   const logcat = `${app}/test-results/logcat.txt`;
   writeFile(logcat, (await start("adb", ["-s", device, "logcat", "-d"], { all: true, reject: false })).all ?? "");
   console.log(`Device log: ${logcat}`);
+  if (stopEmulator) await stopAndroidEmulator(device);
 }

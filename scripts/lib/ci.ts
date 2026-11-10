@@ -213,6 +213,21 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Stops the Android emulator, killing it if it hasn't exited after 30 s: it can hang on shutdown, and
+ * android-emulator-runner waits for it. Linux.
+ */
+export async function stopAndroidEmulator(device: string): Promise<void> {
+  const processes = `${process.env["ANDROID_HOME"] ?? "/usr/local/lib/android/sdk"}/emulator/`;
+  const running = async () => (await start("pgrep", ["-f", processes], { reject: false })).exitCode === 0;
+  run("adb", ["-s", device, "emu", "kill"], { check: false });
+  for (let i = 0; i < 30 && await running(); i++) await sleep(1000);
+  if (await running()) {
+    core.warning(`The emulator didn't exit within 30 s of adb emu kill; killing it.`);
+    run("pkill", ["-9", "-f", processes], { check: false });
+  }
+}
+
 /** A pinned download of a binary. */
 export interface PinnedAsset {
   /** Where to download the archive (.zip, .tar.gz). */
