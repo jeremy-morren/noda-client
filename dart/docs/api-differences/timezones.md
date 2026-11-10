@@ -1,6 +1,6 @@
 # API differences: time zones
 
-`DateTimeZone`, `ZonedDateTime`, providers, `TimeZones/**` (except the system source) and `windows.dart`.
+`DateTimeZone`, `ZonedDateTime`, providers and `TimeZones/**` (except the system source).
 
 | C# member | Dart member | Why |
 |---|---|---|
@@ -43,4 +43,3 @@
 | `TzdbStreamData.Builder`, `DateTimeZoneWriter.ZoneIntervalConstants` (internal) | `TzdbStreamDataBuilder`, `DateTimeZoneWriterZoneIntervalConstants` | Nested types |
 | `TzdbStreamData.FromStream` (internal) | kept, plus `FromBytes(Uint8List)` | As noda-js |
 | `TzdbStreamData.CreateZone`'s `KeyNotFoundException`; `ReadDictionary`'s duplicate key | `ArgumentError` with .NET's message | Exceptions |
-| (none) | `WindowsIdDateTimeZoneProvider`, `GetCldrWindowsZones()`, `WindowsZonesData` (`windows.dart`) | noda-js's `noda-js/windows`: Windows IDs mapped to tzdb zones by CLDR |

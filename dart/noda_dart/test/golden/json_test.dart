@@ -6,7 +6,6 @@ import 'dart:convert';
 import 'package:noda_dart/noda_dart.dart';
 import 'package:noda_dart/testing.dart';
 import 'package:noda_dart/tzdb_bundled.dart' as tzdb_bundled;
-import 'package:noda_dart/windows.dart';
 import 'package:test/test.dart';
 
 import '../helpers/Assertions.dart';
@@ -142,7 +141,7 @@ void main() {
           final written = jsonDecode(jsonEncode(value));
           var expected = json[property.name];
           if (property.name.startsWith('Bcl')) {
-            // windows.dart's zones keep their tzdb IDs (only lookup accepts the Windows form).
+            // A Windows ID gives the tzdb zone, which writes its tzdb ID.
             final zone = value is ZonedDateTime ? value.Zone : value as DateTimeZone;
             final encoded = property.value as Map<String, Object?>;
             final windowsId = ((encoded['zone'] ?? encoded) as Map<String, Object?>)['id'] as String;
@@ -197,28 +196,6 @@ void main() {
 
     test('an offset the zone doesn\'t have at that local time', () {
       expect(() => ZonedDateTime.fromJson('2024-03-31T15:30:15+02 Europe/London', provider),
-          throwsA(isA<UnparsableValueException>()));
-    });
-  });
-
-  group('JSON with the Windows zone ID provider (package:noda_dart/windows.dart)', () {
-    final provider = WindowsIdDateTimeZoneProvider(tzdb_bundled.tzdb);
-
-    test('ZonedDateTime and DateTimeZone round trip', () {
-      final zone = provider['AUS Eastern Standard Time'];
-      final value = Instant.FromUtc(2024, 3, 31, 14, 30, 15).InZone(zone);
-      // The zones keep their tzdb IDs (only lookup accepts the Windows form), so they write those; both read back.
-      expect(value.toJson(), '2024-04-01T01:30:15+11 Australia/Sydney');
-      Assert.AreEqual(value, ZonedDateTime.fromJson(value.toJson(), provider));
-      Assert.AreEqual(value, ZonedDateTime.fromJson('2024-04-01T01:30:15+11 AUS Eastern Standard Time', provider));
-      expect(identical(DateTimeZone.fromJson(zone.toJson(), provider), zone), isTrue);
-      expect(identical(DateTimeZone.fromJson('AUS Eastern Standard Time', provider), zone), isTrue);
-    });
-
-    test('an unknown Windows ID', () {
-      expect(() => DateTimeZone.fromJson('Nowhere Standard Time', provider),
-          throwsA(isA<DateTimeZoneNotFoundException>()));
-      expect(() => ZonedDateTime.fromJson('2024-04-01T01:30:15+11 Nowhere Standard Time', provider),
           throwsA(isA<UnparsableValueException>()));
     });
   });

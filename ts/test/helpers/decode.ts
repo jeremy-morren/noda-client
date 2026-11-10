@@ -23,7 +23,6 @@ import {
   PrecalculatedDateTimeZone,
   type IDateTimeZoneProvider,
 } from "../../src/noda-js/internal.ts";
-import { WindowsIdDateTimeZoneProvider } from "../../src/noda-js/entries/windows.ts";
 import * as calendars from "../../src/noda-js/entries/calendars/all.ts";
 import type { EncodedObject, EncodedValue } from "../scenarios/types.ts";
 import { scenarioCultures } from "../scenarios/cultures.generated.ts";
@@ -41,20 +40,52 @@ export const testZones = new Map<string, DateTimeZone>();
 const customZoneCache = new Map<string, DateTimeZone>();
 
 let tzdbProvider: IDateTimeZoneProvider | undefined;
+let windowsIdProvider: IDateTimeZoneProvider | undefined;
 export async function loadTzdbProvider(): Promise<IDateTimeZoneProvider> {
   if (!tzdbProvider) {
     const module = await import("../../src/noda-js/entries/tzdb-bundled.ts");
     tzdbProvider = module.tzdb;
+    windowsIdProvider = new WindowsIdProvider(module.tzdb, module.tzdbSource.WindowsMapping.PrimaryMapping);
   }
   return tzdbProvider;
 }
 
-let windowsIdProvider: WindowsIdDateTimeZoneProvider | undefined;
-export function windowsProvider(): WindowsIdDateTimeZoneProvider {
-  if (!tzdbProvider) {
+/** tzdb that also looks zones up by the Windows IDs .NET's BclDateTimeZone writes (tzdb's WindowsMapping). */
+class WindowsIdProvider implements IDateTimeZoneProvider {
+  readonly Ids: readonly string[];
+  private readonly _tzdb: IDateTimeZoneProvider;
+  private readonly _mapping: ReadonlyMap<string, string>;
+
+  constructor(tzdb: IDateTimeZoneProvider, mapping: ReadonlyMap<string, string>) {
+    this._tzdb = tzdb;
+    this._mapping = mapping;
+    // Zone ID patterns parse IDs from this list.
+    this.Ids = [...new Set([...tzdb.Ids, ...mapping.keys()])].sort();
+  }
+
+  get VersionId(): string {
+    return this._tzdb.VersionId;
+  }
+
+  GetSystemDefault(): DateTimeZone {
+    return this._tzdb.GetSystemDefault();
+  }
+
+  GetZoneOrNull(id: string): DateTimeZone | null {
+    const tzdbId = this._mapping.get(id);
+    return this._tzdb.GetZoneOrNull(id) ?? (tzdbId === undefined ? null : this._tzdb.GetZoneOrNull(tzdbId));
+  }
+
+  Get(id: string): DateTimeZone {
+    return this.GetZoneOrNull(id) ?? this._tzdb.Get(id);
+  }
+}
+
+export function windowsProvider(): IDateTimeZoneProvider {
+  if (!windowsIdProvider) {
     throw new UnsupportedValue("Call loadTzdbProvider() before decoding Windows (BCL) zones");
   }
-  return (windowsIdProvider ??= new WindowsIdDateTimeZoneProvider(tzdbProvider));
+  return windowsIdProvider;
 }
 
 const cultureCache = new Map<string, NodaCultureInfo>();

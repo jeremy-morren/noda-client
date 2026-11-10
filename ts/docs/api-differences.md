@@ -50,5 +50,4 @@ Names are NodaTime's, PascalCase included, with the mechanical changes in
 | `valueOf()` | Throws `TypeError`, so `a < b` fails loudly. |
 | `TzdbDateTimeZoneSource.FromBytes(Uint8Array)`, `FromBase64(text)` | Load NZD data. |
 | `DateInterval[Symbol.iterator]` | C#'s `IEnumerable<LocalDate>`. |
-| `noda-js/windows`: `WindowsIdDateTimeZoneProvider`, `GetCldrWindowsZones()` | Windows IDs mapped to tzdb zones. |
 | `noda-js/tzdb/compiler`: `CompileTzdb`, `CompileTzdbToNzd`, `CompileTzdbSync`, `CompileTzdbToNzdSync` | NodaTime.TzdbCompiler as functions: an IANA `.tar.gz`/`.tar` (URL, bytes, `Blob`; async also `Request`, `Response`, streams) → a validated source, or NodaTime's NZD bytes. Options: `WindowsZones` (`-w`), `Log`. Not supported: single-zone and XML output, `.tar.lz`. |

@@ -5,6 +5,9 @@ All notable changes to noda_dart are documented in this file. The format is base
 under Unreleased as they're merged; releasing turns it into the version's section.
 
 ## [Unreleased]
+### Removed
+- `package:noda_dart/windows.dart` (`WindowsIdDateTimeZoneProvider`, `GetCldrWindowsZones`), which NodaTime doesn't
+  have. Map a Windows ID with `tzdbSource.WindowsMapping.PrimaryMapping`.
 
 ## [3.3.1] - 2026-11-10
 ### Added
