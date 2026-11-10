@@ -68,7 +68,7 @@
     "playwright": "1.65.0",
     "publint": "^0.3.25",
     "quickjs-emscripten": "0.32.0",
-    "rollup": "^4.67.5",
+    "rollup": "^4.68.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vitest": "5.1.0",
