@@ -25,7 +25,7 @@ Names are NodaTime's, PascalCase included, with the mechanical changes in
 | NodaTime | noda-js |
 |---|---|
 | `BclDateTimeZoneSource`, `BclDateTimeZone`, `DateTimeZoneProviders.Bcl` | `SystemDateTimeZoneSource`, `SystemDateTimeZone`, `SystemDateTimeZoneProvider` (`noda-js/system`): Windows' zones as on .NET (FFI or addon), else `Intl`'s. `VersionId` names the backend; `TZ` is honoured everywhere. See [Timezones.md](Timezones.md). |
-| `TzdbDateTimeZoneSource.GetSystemDefaultId` | `TZ`'s zone, else `Intl`'s, guessing with `Date`'s offsets. See [Timezones.md](Timezones.md#the-system-default-zone). |
+| `TzdbDateTimeZoneSource.GetSystemDefaultId` | `TZ`'s zone, else `Intl`'s, guessing with `Date`'s offsets. See [Timezones.md](Timezones.md#tz). |
 | Indexers `PeriodBuilder[PeriodUnits]`, `IDateTimeZoneProvider[string]` | `builder.Get(unit)` / `Set(unit, value)`, `provider.Get(id)` |
 | `LocalDateTime.With(Func<LocalTime, LocalTime>)`, `OffsetDateTime.With(...)` | `WithTimeAdjuster(fn)` (indistinguishable at run time from the `LocalDate` overload). |
 | `Instant.ToUnixTimeSecondsAndNanoseconds()` (tuple) | `{ seconds, nanoseconds }` |

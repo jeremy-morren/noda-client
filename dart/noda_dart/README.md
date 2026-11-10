@@ -93,7 +93,6 @@ NodaTime's `DateTime`/`TimeSpan` conversions use Dart's `DateTime` and `Duration
 - `Duration.FromCoreDuration` / `ToCoreDuration` (`dartDuration.ToDuration()`), `Offset.FromCoreDuration`,
   `stopwatch.ElapsedDuration()`.
 - Precision is microseconds; finer values are truncated.
-- No `DateTimeOffset`, `DateOnly`, `TimeOnly`: see [core.md](../docs/api-differences/core.md).
 
 ## The local time zone
 
