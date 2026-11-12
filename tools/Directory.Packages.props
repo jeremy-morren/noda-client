@@ -12,6 +12,6 @@
     <!-- Only for NodaTime.Serialization.SystemTextJson: the tools use the clone's projects. -->
     <PackageVersion Include="NodaTime" Version="3.3.7" />
     <PackageVersion Include="NodaTime.Serialization.SystemTextJson" Version="1.4.0" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.14" />
+    <PackageVersion Include="System.CommandLine" Version="3.0.0" />
   </ItemGroup>
 </Project>
