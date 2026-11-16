@@ -31,7 +31,7 @@ export const elGR: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαΐ", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ", ""],
     DayNames: ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο"],
     AbbreviatedDayNames: ["Κυρ", "Δευ", "Τρί", "Τετ", "Πέμ", "Παρ", "Σάβ"],
-    ShortestDayNames: ["Κ", "Δ", "Τ", "Τ", "Π", "Π", "Σ"],
+    ShortestDayNames: ["Κυ", "Δε", "Τρ", "Τε", "Πέ", "Πα", "Σά"],
     EraNames: ["μ.Χ."],
     AbbreviatedEraNames: ["μ.Χ."],
     FirstDayOfWeek: 1,

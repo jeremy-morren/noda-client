@@ -31,7 +31,7 @@ final NodaCultureInfo enZA = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec', ''],
     DayNames: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     AbbreviatedDayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-    ShortestDayNames: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+    ShortestDayNames: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
     EraNames: ['AD'],
     AbbreviatedEraNames: ['AD'],
     FirstDayOfWeek: 0,

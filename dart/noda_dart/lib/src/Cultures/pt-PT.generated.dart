@@ -31,7 +31,7 @@ final NodaCultureInfo ptPT = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.', ''],
     DayNames: ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'],
     AbbreviatedDayNames: ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'],
-    ShortestDayNames: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
+    ShortestDayNames: ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'],
     EraNames: ['d.C.'],
     AbbreviatedEraNames: ['d.C.'],
     FirstDayOfWeek: 0,

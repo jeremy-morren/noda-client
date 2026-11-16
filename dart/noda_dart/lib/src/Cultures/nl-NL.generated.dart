@@ -31,7 +31,7 @@ final NodaCultureInfo nlNL = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec', ''],
     DayNames: ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'],
     AbbreviatedDayNames: ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'],
-    ShortestDayNames: ['Z', 'M', 'D', 'W', 'D', 'V', 'Z'],
+    ShortestDayNames: ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'],
     EraNames: ['n.Chr.'],
     AbbreviatedEraNames: ['n.C.'],
     FirstDayOfWeek: 1,

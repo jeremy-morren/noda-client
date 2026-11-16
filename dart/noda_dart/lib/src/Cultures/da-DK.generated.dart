@@ -31,7 +31,7 @@ final NodaCultureInfo daDK = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.', 'jul.', 'aug.', 'sep.', 'okt.', 'nov.', 'dec.', ''],
     DayNames: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'],
     AbbreviatedDayNames: ['søn.', 'man.', 'tirs.', 'ons.', 'tors.', 'fre.', 'lør.'],
-    ShortestDayNames: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
+    ShortestDayNames: ['sø.', 'ma.', 'ti.', 'on.', 'to.', 'fr.', 'lø.'],
     EraNames: ['e.Kr.'],
     AbbreviatedEraNames: ['eKr'],
     FirstDayOfWeek: 1,

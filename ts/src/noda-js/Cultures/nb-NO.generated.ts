@@ -31,7 +31,7 @@ export const nbNO: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["jan.", "feb.", "mar.", "apr.", "mai", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "des.", ""],
     DayNames: ["søndag", "mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag"],
     AbbreviatedDayNames: ["søn.", "man.", "tir.", "ons.", "tor.", "fre.", "lør."],
-    ShortestDayNames: ["S", "M", "T", "O", "T", "F", "L"],
+    ShortestDayNames: ["sø.", "ma.", "ti.", "on.", "to.", "fr.", "lø."],
     EraNames: ["e.Kr."],
     AbbreviatedEraNames: ["e.Kr."],
     FirstDayOfWeek: 1,

@@ -31,7 +31,7 @@ export const deCH: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez.", ""],
     DayNames: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
     AbbreviatedDayNames: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"],
-    ShortestDayNames: ["S", "M", "D", "M", "D", "F", "S"],
+    ShortestDayNames: ["So.", "Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa."],
     EraNames: ["n. Chr."],
     AbbreviatedEraNames: ["n. Chr."],
     FirstDayOfWeek: 1,

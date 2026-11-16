@@ -31,7 +31,7 @@ export const trTR: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara", ""],
     DayNames: ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"],
     AbbreviatedDayNames: ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"],
-    ShortestDayNames: ["P", "P", "S", "Ç", "P", "C", "C"],
+    ShortestDayNames: ["Pa", "Pt", "Sa", "Ça", "Pe", "Cu", "Ct"],
     EraNames: ["MS"],
     AbbreviatedEraNames: ["MS"],
     FirstDayOfWeek: 1,

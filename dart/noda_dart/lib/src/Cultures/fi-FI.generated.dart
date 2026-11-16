@@ -31,7 +31,7 @@ final NodaCultureInfo fiFI = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['tammik.', 'helmik.', 'maalisk.', 'huhtik.', 'toukok.', 'kesäk.', 'heinäk.', 'elok.', 'syysk.', 'lokak.', 'marrask.', 'jouluk.', ''],
     DayNames: ['sunnuntai', 'maanantai', 'tiistai', 'keskiviikko', 'torstai', 'perjantai', 'lauantai'],
     AbbreviatedDayNames: ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'],
-    ShortestDayNames: ['S', 'M', 'T', 'K', 'T', 'P', 'L'],
+    ShortestDayNames: ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'],
     EraNames: ['jKr.'],
     AbbreviatedEraNames: ['jKr'],
     FirstDayOfWeek: 1,
