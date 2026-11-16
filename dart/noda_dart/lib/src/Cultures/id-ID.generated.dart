@@ -31,7 +31,7 @@ final NodaCultureInfo idID = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des', ''],
     DayNames: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
     AbbreviatedDayNames: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
-    ShortestDayNames: ['M', 'S', 'S', 'R', 'K', 'J', 'S'],
+    ShortestDayNames: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
     EraNames: ['M'],
     AbbreviatedEraNames: ['M'],
     FirstDayOfWeek: 0,

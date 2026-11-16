@@ -31,7 +31,7 @@ final NodaCultureInfo esMX = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic', ''],
     DayNames: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
     AbbreviatedDayNames: ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
-    ShortestDayNames: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+    ShortestDayNames: ['DO', 'LU', 'MA', 'MI', 'JU', 'VI', 'SA'],
     EraNames: ['d.C.'],
     AbbreviatedEraNames: ['d.C.'],
     FirstDayOfWeek: 0,

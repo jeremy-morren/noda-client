@@ -31,7 +31,7 @@ export const ukUA: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["січ.", "лют.", "бер.", "квіт.", "трав.", "черв.", "лип.", "серп.", "вер.", "жовт.", "лист.", "груд.", ""],
     DayNames: ["неділя", "понеділок", "вівторок", "середа", "четвер", "пʼятниця", "субота"],
     AbbreviatedDayNames: ["нд", "пн", "вт", "ср", "чт", "пт", "сб"],
-    ShortestDayNames: ["Н", "П", "В", "С", "Ч", "П", "С"],
+    ShortestDayNames: ["нд", "пн", "вт", "ср", "чт", "пт", "сб"],
     EraNames: ["н. е."],
     AbbreviatedEraNames: ["н.е."],
     FirstDayOfWeek: 1,

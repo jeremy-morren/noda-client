@@ -31,7 +31,7 @@ export const zhCN: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月", ""],
     DayNames: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
     AbbreviatedDayNames: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
-    ShortestDayNames: ["日", "一", "二", "三", "四", "五", "六"],
+    ShortestDayNames: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
     EraNames: ["公元"],
     AbbreviatedEraNames: ["公元"],
     FirstDayOfWeek: 1,

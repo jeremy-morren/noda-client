@@ -31,7 +31,7 @@ export const csCZ: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro", ""],
     DayNames: ["neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"],
     AbbreviatedDayNames: ["ne", "po", "út", "st", "čt", "pá", "so"],
-    ShortestDayNames: ["N", "P", "Ú", "S", "Č", "P", "S"],
+    ShortestDayNames: ["ne", "po", "út", "st", "čt", "pá", "so"],
     EraNames: ["n. l."],
     AbbreviatedEraNames: ["n.l."],
     FirstDayOfWeek: 1,

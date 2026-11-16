@@ -31,7 +31,7 @@ final NodaCultureInfo ruRU = NodaCultureInfo.FromDataRegistered(CultureData(
     AbbreviatedMonthGenitiveNames: ['янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.', ''],
     DayNames: ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'],
     AbbreviatedDayNames: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
-    ShortestDayNames: ['В', 'П', 'В', 'С', 'Ч', 'П', 'С'],
+    ShortestDayNames: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
     EraNames: ['н. э.'],
     AbbreviatedEraNames: ['н.э.'],
     FirstDayOfWeek: 1,

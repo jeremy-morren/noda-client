@@ -31,7 +31,7 @@ export const plPL: NodaCultureInfo = /*#__PURE__*/ NodaCultureInfo.FromDataRegis
     AbbreviatedMonthGenitiveNames: ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru", ""],
     DayNames: ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"],
     AbbreviatedDayNames: ["niedz.", "pon.", "wt.", "śr.", "czw.", "pt.", "sob."],
-    ShortestDayNames: ["N", "P", "W", "Ś", "C", "P", "S"],
+    ShortestDayNames: ["nie", "pon", "wto", "śro", "czw", "pią", "sob"],
     EraNames: ["n.e."],
     AbbreviatedEraNames: ["n.e."],
     FirstDayOfWeek: 1,
