@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
-    "@babel/core": "^8.1.0",
+    "@babel/core": "^8.1.2",
     "@babel/plugin-transform-block-scoping": "^8.0.10",
     "@babel/plugin-transform-classes": "^8.1.0",
     "@rollup/plugin-node-resolve": "16.0.3",
