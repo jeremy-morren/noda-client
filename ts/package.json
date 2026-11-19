@@ -58,7 +58,7 @@
     "@vitest/browser-webdriverio": "5.0.0",
     "@vitest/coverage-v8": "5.1.0",
     "esbuild": "^0.28.2",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "eslint-plugin-es-x": "^10.1.0",
     "istanbul-lib-coverage": "3.2.2",
     "istanbul-lib-report": "3.0.1",
